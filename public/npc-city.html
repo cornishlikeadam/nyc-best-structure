@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NYC Best Structure — Dual-Layer City System</title>
+<!-- DATA SPINE: src/data/boroughs.js + subway.js + pois.js + engine.js -->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --ink:#111;--paper:#0d0f11;--paper-light:#151820;--panel:#12141a;
+  --accent:#c4362c;--accent-glow:rgba(196,54,44,.3);
+  --cyan:#00d4ff;--cyan-dim:rgba(0,212,255,.15);
+  --green:#00ff88;--green-dim:rgba(0,255,136,.12);
+  --amber:#ffaa00;--amber-dim:rgba(255,170,0,.12);
+  --magenta:#ff3388;--magenta-dim:rgba(255,51,136,.1);
+  --purple:#aa66ff;--purple-dim:rgba(170,102,255,.1);
+  --muted:#556;--muted-light:#778;
+  --border:rgba(255,255,255,.06);
+  --serif:'Playfair Display',Georgia,serif;
+  --sans:'Inter',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --cat-eat:#ff4444;--cat-shop:#ffaa00;--cat-transit:#00aaff;
+  --cat-culture:#aa66ff;--cat-services:#00dd88;--cat-hidden:#667;
+  --sidebar-w:380px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:15px;-webkit-font-smoothing:antialiased}
+body{background:var(--paper);color:#dde;font-family:var(--sans);overflow:hidden;height:100vh}
+::selection{background:var(--accent);color:#fff}
+
+/* ── LAYOUT ── */
+#app{display:flex;height:100vh}
+#map-area{flex:1;position:relative;overflow:hidden;cursor:crosshair;background:#080a0e}
+#sidebar{width:var(--sidebar-w);background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+
+/* ── HUD OVERLAY ── */
+#hud-top{position:absolute;top:0;left:0;right:0;z-index:20;padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
+#hud-top>*{pointer-events:auto}
+#hud-title{display:flex;flex-direction:column;gap:.15rem}
+#hud-title h1{font-family:var(--serif);font-size:1rem;font-weight:900;color:#eee;letter-spacing:.02em}
+#hud-title .sub{font-family:var(--mono);font-size:.55rem;color:var(--cyan);letter-spacing:.2em;text-transform:uppercase}
+#hud-nav{display:flex;gap:.4rem}
+#hud-nav a{font-family:var(--mono);font-size:.6rem;padding:.3rem .55rem;color:var(--muted-light);text-decoration:none;border:1px solid var(--border);background:rgba(0,0,0,.5);transition:all .15s;letter-spacing:.05em}
+#hud-nav a:hover,#hud-nav a.active{color:var(--cyan);border-color:var(--cyan-dim);background:rgba(0,212,255,.06)}
+
+/* ── LAYER TOGGLES ── */
+#layer-panel{position:absolute;top:3.5rem;left:1rem;z-index:15;display:flex;flex-direction:column;gap:.2rem}
+.layer-toggle{display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.6rem;color:var(--muted-light);cursor:pointer;padding:.25rem .5rem;background:rgba(0,0,0,.4);border:1px solid var(--border);transition:all .15s;user-select:none;letter-spacing:.03em}
+.layer-toggle:hover{border-color:rgba(255,255,255,.12);color:#bbc}
+.layer-toggle.on{color:var(--cyan);border-color:var(--cyan-dim)}
+.layer-toggle .lt-dot{width:7px;height:7px;border-radius:50%;opacity:.5;transition:opacity .15s}
+.layer-toggle.on .lt-dot{opacity:1}
+
+/* ── ZOOM / CONTROLS ── */
+#controls{position:absolute;bottom:1rem;left:1rem;z-index:15;display:flex;flex-direction:column;gap:2px}
+#controls button{width:34px;height:34px;background:rgba(0,0,0,.6);border:1px solid var(--border);color:var(--muted-light);font-family:var(--mono);font-size:.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+#controls button:hover{color:var(--cyan);border-color:var(--cyan-dim);background:rgba(0,212,255,.06)}
+
+/* ── CLOCK / STATS ── */
+#hud-bottom{position:absolute;bottom:1rem;left:50%;transform:translateX(-50%);z-index:15;display:flex;gap:1.5rem;font-family:var(--mono);font-size:.6rem;color:var(--muted);background:rgba(0,0,0,.5);border:1px solid var(--border);padding:.4rem 1rem}
+#hud-bottom .hb-val{color:var(--cyan);font-weight:500}
+
+/* ── TIME SLIDER ── */
+#time-control{position:absolute;bottom:3.5rem;left:50%;transform:translateX(-50%);z-index:15;display:flex;align-items:center;gap:.6rem;background:rgba(0,0,0,.5);border:1px solid var(--border);padding:.35rem .75rem}
+#time-slider{-webkit-appearance:none;width:180px;height:3px;background:var(--border);outline:none;border-radius:2px;cursor:pointer}
+#time-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--cyan);cursor:pointer;border:2px solid var(--paper)}
+#time-label{font-family:var(--mono);font-size:.65rem;color:var(--cyan);min-width:42px;text-align:center}
+#time-play{background:none;border:1px solid var(--border);color:var(--muted-light);font-family:var(--mono);font-size:.6rem;padding:.2rem .4rem;cursor:pointer}
+#time-play:hover{color:var(--cyan);border-color:var(--cyan-dim)}
+
+/* ── MINIMAP ── */
+#minimap{position:absolute;bottom:1rem;right:calc(var(--sidebar-w) + 1rem);z-index:15;width:130px;height:150px;background:rgba(0,0,0,.6);border:1px solid var(--border);overflow:hidden;cursor:pointer}
+#minimap svg{width:100%;height:100%}
+.mm-vp{fill:none;stroke:var(--cyan);stroke-width:2;opacity:.6}
+
+/* ── SIDEBAR ── */
+#sidebar-head{padding:.75rem 1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,.3)}
+#sidebar-head h2{font-family:var(--serif);font-size:.85rem;font-weight:900;color:#ccd}
+#sidebar-head .mode{font-family:var(--mono);font-size:.5rem;color:var(--cyan);letter-spacing:.15em}
+
+/* ── FILTER BAR ── */
+#filter-bar{padding:.6rem .75rem;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:.3rem}
+.cat-btn{font-family:var(--mono);font-size:.55rem;padding:.2rem .45rem;border:1px solid var(--border);background:transparent;color:var(--muted-light);cursor:pointer;display:flex;align-items:center;gap:.3rem;transition:all .15s;letter-spacing:.03em}
+.cat-btn:hover{border-color:rgba(255,255,255,.15)}
+.cat-btn.on{color:#eee;border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.05)}
+.cat-btn .cb-dot{width:6px;height:6px;border-radius:50%}
+
+/* ── SEARCH ── */
+#search-bar{padding:.5rem .75rem;border-bottom:1px solid var(--border)}
+#search-input{width:100%;font-family:var(--mono);font-size:.7rem;padding:.4rem .5rem;background:rgba(255,255,255,.03);border:1px solid var(--border);color:#ccd;outline:none}
+#search-input::placeholder{color:var(--muted)}
+#search-input:focus{border-color:var(--cyan-dim)}
+#search-results{max-height:200px;overflow-y:auto;display:none}
+#search-results.open{display:block}
+.sr-item{display:flex;align-items:center;gap:.5rem;padding:.45rem .75rem;cursor:pointer;border-bottom:1px solid var(--border);font-size:.75rem;transition:background .1s}
+.sr-item:hover{background:rgba(255,255,255,.03)}
+.sr-item .sr-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sr-item .sr-name{font-family:var(--serif);font-weight:600;color:#dde}
+.sr-item .sr-sub{font-family:var(--mono);font-size:.55rem;color:var(--muted)}
+
+/* ── DETAIL ── */
+#detail{flex:1;overflow-y:auto;padding:1rem;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.08) transparent}
+#detail::-webkit-scrollbar{width:5px}
+#detail::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
+#detail.empty{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:2rem}
+.d-prompt{font-family:var(--serif);font-style:italic;color:var(--muted-light);font-size:.9rem;line-height:1.7}
+.d-prompt-sub{font-family:var(--mono);font-size:.55rem;color:var(--muted);margin-top:.75rem;letter-spacing:.1em}
+.d-cat{font-family:var(--mono);font-size:.55rem;letter-spacing:.2em;text-transform:uppercase;margin-bottom:.35rem}
+.d-name{font-family:var(--serif);font-size:1.3rem;font-weight:900;color:#eef;line-height:1.2;margin-bottom:.3rem}
+.d-hood{font-family:var(--mono);font-size:.65rem;color:var(--muted-light);margin-bottom:.75rem}
+.d-desc{font-family:var(--serif);font-size:.88rem;line-height:1.8;color:#aab;margin-bottom:1rem}
+.d-tags{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:1rem}
+.d-tag{font-family:var(--mono);font-size:.55rem;padding:.2rem .4rem;border:1px solid var(--border);color:var(--muted-light);letter-spacing:.03em}
+.d-meta{font-family:var(--mono);font-size:.6rem;color:var(--muted);border-top:1px solid var(--border);padding-top:.75rem;line-height:1.8}
+.d-coords{font-family:var(--mono);font-size:.55rem;color:var(--muted);margin-top:.3rem}
+
+/* ── HOOD DETAIL ── */
+.hd-title{font-family:var(--serif);font-size:1.2rem;font-weight:900;color:#eef;margin-bottom:.2rem}
+.hd-sub{font-family:var(--mono);font-size:.6rem;color:var(--muted-light);margin-bottom:.6rem}
+.hd-desc{font-family:var(--serif);font-size:.85rem;line-height:1.7;color:#99a;margin-bottom:1rem}
+.hd-stats{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:1rem}
+.hd-stat{padding:.4rem .5rem;background:rgba(255,255,255,.02);border:1px solid var(--border)}
+.hd-stat-label{font-family:var(--mono);font-size:.5rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.hd-stat-val{font-family:var(--mono);font-size:.85rem;color:var(--cyan);font-weight:500;margin-top:.15rem}
+.hd-list{display:flex;flex-direction:column}
+.hd-poi{display:flex;align-items:center;gap:.5rem;padding:.4rem .3rem;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.hd-poi:hover{background:rgba(255,255,255,.02)}
+.hd-poi .hp-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.hd-poi .hp-name{font-family:var(--serif);font-size:.78rem;color:#bbc}
+.hd-poi .hp-cat{font-family:var(--mono);font-size:.5rem;color:var(--muted)}
+
+/* ── SIDEBAR FOOTER ── */
+#sidebar-foot{padding:.5rem .75rem;border-top:1px solid var(--border);font-family:var(--mono);font-size:.5rem;color:var(--muted);text-align:center;letter-spacing:.08em;background:rgba(0,0,0,.3)}
+#sidebar-foot a{color:var(--cyan);text-decoration:none}
+
+/* ── SVG STYLES ── */
+.borough{transition:fill .3s,stroke .3s;cursor:pointer}
+.borough:hover{fill-opacity:.18}
+.borough.active{stroke-width:1.5;fill-opacity:.2}
+.district{fill:transparent;stroke:rgba(255,255,255,.04);stroke-width:.3;pointer-events:none}
+.road{fill:none;stroke-linecap:round;pointer-events:none}
+.road-highway{stroke:rgba(255,200,50,.12);stroke-width:1.8}
+.road-major{stroke:rgba(255,255,255,.07);stroke-width:.8}
+.road-minor{stroke:rgba(255,255,255,.03);stroke-width:.4}
+.subway-line{fill:none;stroke-linecap:round;stroke-width:2;opacity:.5;pointer-events:none}
+.subway-station{fill:#222;stroke-width:1.5;cursor:pointer}
+.water{fill:#0a1020;stroke:none}
+.park{fill:rgba(0,180,80,.08);stroke:rgba(0,180,80,.15);stroke-width:.5}
+.poi{cursor:pointer;transition:r .12s,opacity .2s}
+.poi:hover{r:5.5}
+.poi.active{r:7;stroke:rgba(255,255,255,.6);stroke-width:2}
+.poi.dimmed{opacity:.06;pointer-events:none}
+.heat-cell{pointer-events:none;transition:opacity .5s}
+.label{font-family:var(--mono);fill:rgba(255,255,255,.2);pointer-events:none;text-transform:uppercase;letter-spacing:2px}
+.label-district{font-size:5px;fill:rgba(255,255,255,.12);letter-spacing:1.5px}
+.grid-line{stroke:rgba(255,255,255,.015);stroke-width:.3;pointer-events:none}
+.event-marker{pointer-events:none;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.3;r:8}50%{opacity:.8;r:14}}
+
+/* ── GUIDE POI (diamond marker) ── */
+.poi-guide{cursor:pointer;transition:transform .15s,opacity .2s;filter:drop-shadow(0 0 4px rgba(255,255,255,.3))}
+.poi-guide:hover{transform:scale(1.2)}
+.poi-guide.active{filter:drop-shadow(0 0 8px rgba(0,212,255,.5))}
+.poi-guide.dimmed{opacity:.08;pointer-events:none}
+.guide-badge{font-family:var(--mono);font-size:3.5px;fill:rgba(255,255,255,.5);pointer-events:none;letter-spacing:.5px}
+
+/* ── TRACKING ── */
+.connection-line{stroke:var(--cyan);stroke-width:.8;stroke-dasharray:3,3;opacity:.25;pointer-events:none;animation:dash 8s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-48}}
+.tracked-ring{fill:none;stroke:var(--cyan);stroke-width:1;opacity:.3;pointer-events:none;animation:ring-pulse 3s ease-in-out infinite}
+@keyframes ring-pulse{0%,100%{r:10;opacity:.15}50%{r:16;opacity:.35}}
+
+#track-btn{font-family:var(--mono);font-size:.6rem;padding:.35rem .7rem;border:1px solid var(--cyan-dim);background:transparent;color:var(--cyan);cursor:pointer;letter-spacing:.08em;transition:all .15s;margin-top:.75rem;display:inline-block}
+#track-btn:hover{background:rgba(0,212,255,.1);border-color:var(--cyan)}
+#track-btn.tracking{background:var(--cyan);color:var(--paper);border-color:var(--cyan)}
+
+#tracked-panel{border-top:1px solid var(--border);padding:.6rem .75rem;max-height:140px;overflow-y:auto;display:none}
+#tracked-panel.has-items{display:block}
+#tracked-panel h4{font-family:var(--mono);font-size:.5rem;letter-spacing:.2em;color:var(--cyan);margin-bottom:.4rem}
+.tracked-item{display:flex;align-items:center;gap:.4rem;padding:.3rem .2rem;cursor:pointer;font-size:.7rem;border-bottom:1px solid var(--border);transition:background .1s}
+.tracked-item:hover{background:rgba(255,255,255,.02)}
+.tracked-item .ti-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.tracked-item .ti-name{font-family:var(--serif);font-size:.7rem;color:#aab}
+.tracked-item .ti-x{margin-left:auto;color:var(--muted);cursor:pointer;font-size:.6rem;padding:0 .3rem}
+.tracked-item .ti-x:hover{color:var(--accent)}
+
+/* ── SEED DISPLAY ── */
+#seed-display{font-family:var(--mono);font-size:.5rem;color:var(--muted);letter-spacing:.1em;padding:.3rem .75rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+#seed-display .seed-val{color:var(--cyan);font-weight:500}
+#seed-display .seed-copy{cursor:pointer;color:var(--muted);transition:color .15s}
+#seed-display .seed-copy:hover{color:var(--cyan)}
+
+/* ── ACTIVITY SPARKLINE ── */
+.sparkline{display:flex;align-items:flex-end;gap:1px;height:30px;margin-top:.5rem}
+.spark-bar{width:5px;background:var(--cyan);opacity:.4;border-radius:1px 1px 0 0;transition:opacity .15s}
+.spark-bar.current{opacity:1;background:var(--accent)}
+
+/* ── TOOLTIP ── */
+#tooltip{position:fixed;z-index:200;pointer-events:none;display:none;background:rgba(10,12,18,.92);border:1px solid var(--border);padding:.35rem .55rem;font-family:var(--mono);font-size:.6rem;color:#bbc;max-width:220px;white-space:nowrap;backdrop-filter:blur(6px)}
+
+/* ── CONNECTION GRAPH ── */
+.conn-line{stroke:var(--cyan);stroke-width:.6;stroke-dasharray:2,2;opacity:0;pointer-events:none;transition:opacity .3s}
+.conn-line.show{opacity:.35;animation:dash 8s linear infinite}
+.conn-node{opacity:0;pointer-events:none;transition:opacity .3s}
+.conn-node.show{opacity:1}
+.d-connections{margin-top:.75rem;border-top:1px solid var(--border);padding-top:.6rem}
+.d-connections h5{font-family:var(--mono);font-size:.5rem;letter-spacing:.15em;color:var(--cyan);margin-bottom:.4rem;text-transform:uppercase}
+.d-conn-item{display:flex;align-items:center;gap:.4rem;padding:.3rem .2rem;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s}
+.d-conn-item:hover{background:rgba(0,212,255,.04)}
+.d-conn-item .dc-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.d-conn-item .dc-name{font-family:var(--serif);font-size:.72rem;color:#aab}
+.d-conn-item .dc-cat{font-family:var(--mono);font-size:.48rem;color:var(--muted)}
+
+/* ── SURVEILLANCE MODE ── */
+.surv-toggle{position:absolute;top:3.5rem;right:calc(var(--sidebar-w) + 1rem);z-index:15;display:flex;gap:2px}
+.surv-btn{font-family:var(--mono);font-size:.55rem;padding:.3rem .55rem;border:1px solid var(--border);background:rgba(0,0,0,.5);color:var(--muted-light);cursor:pointer;letter-spacing:.05em;transition:all .15s}
+.surv-btn:hover{border-color:rgba(255,255,255,.12)}
+.surv-btn.active{color:var(--accent);border-color:var(--accent);background:rgba(196,54,44,.1)}
+body.surveillance #map-area::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:10;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);animation:scanline 8s linear infinite}
+@keyframes scanline{0%{background-position:0 0}100%{background-position:0 100vh}}
+body.surveillance .poi{transition:opacity .4s}
+body.surveillance .poi.inactive{opacity:.06}
+body.surveillance .event-marker{animation:pulse 1.2s ease-in-out infinite}
+body.surveillance #hud-title .sub{color:var(--accent)}
+body.surveillance .surv-status{display:block}
+.surv-status{display:none;font-family:var(--mono);font-size:.5rem;color:var(--accent);letter-spacing:.15em;padding:.3rem .75rem;border-bottom:1px solid var(--border);background:rgba(196,54,44,.05);text-align:center;animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* ── RESPONSIVE ── */
+@media(max-width:860px){
+  #app{flex-direction:column}
+  #sidebar{width:100%;height:50vh;border-left:none;border-top:1px solid var(--border)}
+  #map-area{height:50vh}
+  #minimap{right:1rem;bottom:1rem;width:90px;height:105px}
+  #hud-bottom,#time-control{display:none}
+  :root{--sidebar-w:0px}
+}
+</style>
+</head>
+<body>
+
+<div id="tooltip"></div>
+
+<div id="app">
+  <div id="map-area">
+    <!-- HUD -->
+    <div id="hud-top">
+      <div id="hud-title">
+        <h1>NYC BEST STRUCTURE</h1>
+        <div class="sub">DUAL-LAYER CITY SYSTEM &mdash; GEO + SIMULATION</div>
+      </div>
+      <div id="hud-nav">
+        <a href="/">LANDING</a>
+        <a href="/read">READ</a>
+        <a href="/npc-map.html">MAP V1</a>
+        <a href="/npc-city.html" class="active">SYSTEM</a>
+      </div>
+    </div>
+
+    <!-- Layer toggles -->
+    <div id="layer-panel"></div>
+
+    <!-- SVG -->
+    <svg id="map-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <!-- Controls -->
+    <div id="controls">
+      <button onclick="zoomBy(1.3)">+</button>
+      <button onclick="zoomBy(.7)">&minus;</button>
+      <button onclick="resetView()" style="font-size:.55rem">FIT</button>
+    </div>
+
+    <!-- Time -->
+    <div id="time-control">
+      <button id="time-play" onclick="togglePlay()">PLAY</button>
+      <input id="time-slider" type="range" min="0" max="23" value="14" oninput="setHour(+this.value)">
+      <span id="time-label">14:00</span>
+    </div>
+
+    <!-- Stats -->
+    <div id="hud-bottom">
+      <div>HOUR <span class="hb-val" id="hb-hour">14:00</span></div>
+      <div>POIs <span class="hb-val" id="hb-pois">300</span></div>
+      <div>EVENTS <span class="hb-val" id="hb-events">0</span></div>
+      <div>TRACKED <span class="hb-val" id="hb-tracked">0</span></div>
+      <div>ZOOM <span class="hb-val" id="hb-zoom">1.0</span>x</div>
+    </div>
+
+    <!-- Mode toggle -->
+    <div class="surv-toggle">
+      <button class="surv-btn active" id="mode-explore" onclick="setMode('explore')">EXPLORE</button>
+      <button class="surv-btn" id="mode-surv" onclick="setMode('surveillance')">SURVEILLANCE</button>
+    </div>
+
+    <!-- Minimap -->
+    <div id="minimap"><svg id="mm-svg" viewBox="0 0 800 900"></svg></div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div id="sidebar-head">
+      <h2>SYSTEM READER</h2>
+      <div class="mode">LIVE</div>
+    </div>
+    <div id="seed-display">
+      <span>SEED <span class="seed-val" id="seed-val">nyc-001</span></span>
+      <span class="seed-copy" onclick="copySeed()" title="Copy seed URL">COPY LINK</span>
+    </div>
+    <div class="surv-status" id="surv-status">▣ SURVEILLANCE ACTIVE — SCANNING</div>
+    <div id="tracked-panel">
+      <h4>TRACKED NODES</h4>
+      <div id="tracked-list"></div>
+    </div>
+    <div id="filter-bar"></div>
+    <div id="search-bar">
+      <input id="search-input" type="text" placeholder="Search POIs, boroughs, lines..." autocomplete="off">
+      <div id="search-results"></div>
+    </div>
+    <div id="detail" class="empty">
+      <div class="d-prompt">"The city is a system.<br>The map is the interface.<br>Every dot is alive."</div>
+      <div class="d-prompt-sub">GEOGRAPHIC + SIMULATION LAYERS</div>
+    </div>
+    <div id="sidebar-foot">
+      NYC BEST STRUCTURE 2026 &middot; <a href="/">HOME</a> / <a href="/read">READ</a> / <a href="/npc-city.html">SYSTEM</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  0. SEED SYSTEM — Deterministic World Generation
+//     Same seed = same world. Always. This is what makes
+//     editions collectible and worlds replayable.
+// ════════════════════════════════════════════════════════
+
+const WORLD_SEED = new URLSearchParams(location.search).get('seed') || 'nyc-001';
+document.getElementById('seed-val').textContent = WORLD_SEED;
+
+class RNG {
+  constructor(seed){
+    this.seed = typeof seed==='number' ? seed : this._hash(seed);
+    this.initial = this.seed;
+  }
+  _hash(s){ let h=0; s=String(s); for(let i=0;i<s.length;i++){h=((h<<5)-h+s.charCodeAt(i))|0;} return Math.abs(h)||42; }
+  next(){ this.seed=((this.seed*48271)%2147483647); return(this.seed-1)/2147483646; }
+  int(a,b){ return Math.floor(this.next()*(b-a+1))+a; }
+  pick(a){ return a[Math.floor(this.next()*a.length)]; }
+  shuffle(a){ const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(this.next()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+  reset(){ this.seed=this.initial; }
+}
+
+const rng = new RNG(WORLD_SEED);
+// Shorthand helpers
+function R(){return rng.next()}function RI(a,b){return rng.int(a,b)}function pick(a){return rng.pick(a)}function randInBorough(b){return randInB(b)}
+
+function copySeed(){
+  const url = location.origin+location.pathname+'?seed='+encodeURIComponent(WORLD_SEED);
+  navigator.clipboard?.writeText(url);
+  const el = document.querySelector('.seed-copy');
+  el.textContent='COPIED'; setTimeout(()=>el.textContent='COPY LINK',1500);
+}
+
+// ── Geometry ──
+function pip(px,py,path){
+  const n=path.match(/[\d.]+/g).map(Number);const pts=[];
+  for(let i=0;i<n.length;i+=2)pts.push([n[i],n[i+1]]);
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const[xi,yi]=pts[i],[xj,yj]=pts[j];
+    if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi))inside=!inside;
+  }
+  return inside;
+}
+function bbox(path){
+  const n=path.match(/[\d.]+/g).map(Number);
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for(let i=0;i<n.length;i+=2){x0=Math.min(x0,n[i]);x1=Math.max(x1,n[i]);y0=Math.min(y0,n[i+1]);y1=Math.max(y1,n[i+1]);}
+  return{x0,x1,y0,y1};
+}
+function randInB(b){
+  const bb=bbox(b.path);let px,py,t=0;
+  do{px=bb.x0+rng.next()*(bb.x1-bb.x0);py=bb.y0+rng.next()*(bb.y1-bb.y0);t++;}
+  while(!pip(px,py,b.path)&&t<80);
+  return{x:Math.round(px*10)/10,y:Math.round(py*10)/10};
+}
+
+// ════════════════════════════════════════════════════════
+//  1. DATA MODEL — GEOGRAPHIC LAYER (REAL)
+//     Canonical source: src/data/boroughs.js
+// ════════════════════════════════════════════════════════
+
+const BOROUGHS = [
+  {
+    id:'manhattan', name:'Manhattan', pop:'1.6M', area:'22.8 sq mi', density:'72K/mi²',
+    desc:'The island. 22 square miles of vertical ambition compressed into a grid that bends below 14th Street. Every block has its own gravity.',
+    fill:'rgba(200,180,140,.08)', stroke:'rgba(200,180,140,.25)',
+    path:'M295,340 L310,310 L320,270 L315,230 L325,190 L330,155 L325,130 L315,110 L300,95 L285,100 L275,120 L270,155 L260,200 L255,240 L258,280 L265,310 L275,340 L280,370 L285,390 L280,410 L275,425 L290,430 L305,420 L310,400 L305,375 Z'
+  },
+  {
+    id:'brooklyn', name:'Brooklyn', pop:'2.6M', area:'69.4 sq mi', density:'37K/mi²',
+    desc:'The borough that contains multitudes. From the brownstones of Park Slope to the boardwalk at Coney Island — every neighborhood is its own thesis.',
+    fill:'rgba(140,180,200,.08)', stroke:'rgba(140,180,200,.2)',
+    path:'M305,420 L290,430 L275,425 L265,435 L255,460 L260,490 L270,520 L290,550 L320,570 L360,580 L400,575 L430,560 L450,535 L460,500 L455,470 L440,445 L420,430 L395,420 L370,415 L345,418 Z'
+  },
+  {
+    id:'queens', name:'Queens', pop:'2.3M', area:'108.7 sq mi', density:'21K/mi²',
+    desc:'The most ethnically diverse urban area on Earth. 138 languages. Every cuisine. The airports, the beaches, and everything between.',
+    fill:'rgba(160,200,160,.08)', stroke:'rgba(160,200,160,.2)',
+    path:'M345,418 L370,415 L395,420 L420,430 L440,445 L455,400 L470,360 L490,320 L500,280 L495,240 L480,210 L460,190 L440,180 L415,175 L390,180 L370,200 L355,220 L345,250 L340,280 L338,310 L335,340 L330,370 L335,395 Z'
+  },
+  {
+    id:'bronx', name:'The Bronx', pop:'1.4M', area:'42.2 sq mi', density:'34K/mi²',
+    desc:'The birthplace of hip-hop, the home of the Yankees, and the borough that never got the credit it deserves. The realest borough.',
+    fill:'rgba(200,160,140,.08)', stroke:'rgba(200,160,140,.2)',
+    path:'M285,100 L300,95 L315,110 L325,130 L330,155 L345,160 L360,150 L380,145 L400,155 L415,175 L440,180 L445,160 L440,130 L425,105 L405,85 L380,72 L355,65 L330,62 L310,68 L295,78 Z'
+  },
+  {
+    id:'staten-island', name:'Staten Island', pop:'475K', area:'57.5 sq mi', density:'8.3K/mi²',
+    desc:'The forgotten borough. Suburbia within city limits. The ferry ride alone is worth it — free, and the best view of the skyline from water level.',
+    fill:'rgba(160,160,180,.08)', stroke:'rgba(160,160,180,.18)',
+    path:'M180,460 L200,445 L215,450 L225,465 L230,490 L225,520 L215,545 L200,560 L185,570 L170,565 L160,545 L155,520 L158,495 L165,475 Z'
+  }
+];
+
+// ── Subway lines (simplified paths) ──
+const SUBWAY_LINES = [
+  { id:'1-line', name:'1/2/3', color:'#ee352e',
+    path:'M290,400 L290,370 L288,340 L285,310 L290,280 L295,250 L300,220 L305,190 L310,160 L308,130 L302,100' },
+  { id:'4-line', name:'4/5/6', color:'#00933c',
+    path:'M305,415 L300,385 L298,355 L300,320 L305,290 L308,260 L310,230 L312,200 L310,170 L305,140 L298,105' },
+  { id:'7-line', name:'7', color:'#b933ad',
+    path:'M285,355 L300,350 L320,345 L345,340 L370,330 L395,325 L420,320 L445,310 L465,300' },
+  { id:'l-line', name:'L', color:'#a7a9ac',
+    path:'M280,365 L295,368 L315,370 L340,375 L365,380 L390,385 L415,390 L435,395' },
+  { id:'g-line', name:'G', color:'#6cbe45',
+    path:'M350,420 L355,440 L360,460 L365,480 L375,500 L390,515 L410,525' },
+  { id:'nqr-line', name:'N/Q/R', color:'#fccc0a',
+    path:'M285,395 L290,365 L295,335 L300,305 L305,275 L310,245 L320,215 L330,190 L345,165 L365,150 L390,148' },
+  { id:'ace-line', name:'A/C/E', color:'#2850ad',
+    path:'M280,410 L278,380 L276,350 L275,320 L277,290 L280,260 L282,230 L285,200 L290,170 L295,145 L300,115 L305,90' },
+  { id:'bdfm-line', name:'B/D/F/M', color:'#ff6319',
+    path:'M290,425 L285,400 L282,370 L280,340 L282,310 L285,280 L290,250 L295,220 L300,195 L305,170 L310,145 L315,120' },
+];
+
+// ── Subway stations ──
+const SUBWAY_STATIONS = [
+  {name:'Times Square',x:292,y:280,lines:['1-line','nqr-line','7-line','ace-line']},
+  {name:'Grand Central',x:305,y:265,lines:['4-line','7-line']},
+  {name:'Union Square',x:295,y:330,lines:['4-line','nqr-line','l-line']},
+  {name:'Penn Station',x:282,y:295,lines:['1-line','ace-line']},
+  {name:'Fulton St',x:290,y:400,lines:['ace-line','4-line']},
+  {name:'Atlantic Ave',x:340,y:430,lines:['bdfm-line','nqr-line']},
+  {name:'Bedford Ave',x:355,y:385,lines:['l-line']},
+  {name:'Court Square',x:360,y:340,lines:['7-line','g-line']},
+  {name:'Jackson Heights',x:440,y:310,lines:['7-line']},
+  {name:'125th St',x:298,y:150,lines:['1-line','ace-line']},
+  {name:'Yankee Stadium',x:330,y:110,lines:['bdfm-line']},
+  {name:'Canal St',x:285,y:370,lines:['nqr-line','ace-line']},
+  {name:'14th St',x:280,y:345,lines:['1-line','ace-line','l-line']},
+  {name:'59th St',x:295,y:255,lines:['1-line','nqr-line']},
+  {name:'Barclays Center',x:345,y:440,lines:['bdfm-line','nqr-line']},
+  {name:'Coney Island',x:340,y:570,lines:['bdfm-line','nqr-line']},
+  {name:'Flushing',x:470,y:295,lines:['7-line']},
+  {name:'Greenpoint Ave',x:365,y:400,lines:['g-line']},
+  {name:'Broadway Junction',x:420,y:430,lines:['ace-line','l-line']},
+  {name:'Wall Street',x:293,y:410,lines:['4-line']},
+];
+
+// ── Categories ──
+const CATS = {
+  eat:{color:'#ff4444',label:'Eat'},shop:{color:'#ffaa00',label:'Shop'},
+  transit:{color:'#00aaff',label:'Transit'},culture:{color:'#aa66ff',label:'Culture'},
+  services:{color:'#00dd88',label:'Services'},hidden:{color:'#556677',label:'Hidden'}
+};
+
+// ════════════════════════════════════════════════════════
+//  2. DATA GENERATION — Seeded, with Guide Layer
+//     Canonical source: src/data/pois.js
+//     Guide POIs (27) are always present as truth layer
+//     Procedural POIs (~240) expand from same seed
+// ════════════════════════════════════════════════════════
+
+const NAMES={
+  eat:["Copper Kettle","Midnight Ramen","Sal's Forever","Ninth Plate","Burning Loaf","Grandma Lien's","Two Forks","Quiet Noodle","Brick & Broth","Route 9 Diner","Salt Cathedral","Ember Grill","Standing Room","Paper Lantern","The Yolk","Carbon Café","Grateful Bread","Iron Wok","Green Ledger","Bao Down","Clementine's","Slow Roast","King of Falafel","Pearl Oyster","Folding Table","Night Market","Brined Pig","Lemon Theory","Humming Bowl","Basil Republic","Curry Mile","Open Flame","Tomorrow's Lunch","Twice Baked","Smoke & Oak","Bean Counter","Rice Paper","Old Salt","Cornbread Society","Mapo Collective","Root & Branch","Ceramic Bowl","Dawn Patrol","Half Shell","Vinegar Hill","Peppercorn Treaty","Sesame Door","Porridge King","Anchovy Club","Five Alarm Taco"],
+  shop:["Almanac Books","Bolt Hole","Curio Cabinet","Thread & Needle","Map Room","Dusty Volumes","Iron & Oak","Paper Trail","Signal Vintage","Compass & Key","Specimen Jar","Ledger & Co","Patina Hardware","Clock Doctor","Archive Supply","Tandem Cycles","Stamp Room","Loom & Shuttle","Brass Tacks","Pencil Case","Meridian Records","Frame Shop","Salvage Yard","Ink & Thorn","Cobbler's Bench","Binary Thrift","Canopy Plants","Resin Studio","Found Objects","Glassblower","Axiom Design","Wax Seal","Typewriter Revival","Atlas Outfitters","Darning Egg"],
+  transit:["Grand Central Link","Penn Connector","Ferry Landing","Express Platform","Night Bus Depot","Water Taxi Pier","Cable Car Stop","Bridge Approach","Commuter Dock","Trolley Barn","Switch Yard","Overpass Station","Elevated Line","Bus Depot","Crosstown Tram","Funicular Base","Freight Bypass","Turnaround","Causeway","Rail Spur"],
+  culture:["Parallax Gallery","Sound Library","Reel Room","Kiln Collective","Open Score","Broadside Press","Fresco Hall","Listening Room","Sculpture Yard","Camera Obscura","Revival Theater","Print Union","Darkroom","Cipher Wall","Mural Corridor","Phonograph","Poetry Kiosk","Light Box","Gazette Office","Zine Library","Projection Room","Ceramic Archive","Stage Door","Letterpress","Film Vault","Chalk Walk","Resonance Chamber","Puppet Theater","Stencil House","Living Wall","Radio Basement","Woodcut Studio","Atelier Nine","Orchestra Pit","Dance Archive"],
+  services:["Registrar","Postal Annex","Dr. Chen's","Clock Repair","Notary","Mutual Aid","Tool Library","Community Laundry","Barber's Chair","Fix-It Clinic","Bath House","Apothecary","Key & Lock","Message Board","Cobbler","Repair Café","Public Fountain","Info Booth","Community Fridge","Night Clinic","Tailor","Bike Co-op","Mail Drop","Switchboard","Community Oven"],
+  hidden:["Unmarked Door","Tunnel 4","Whispering Wall","Substation Z","Hollow Stump","Forgotten Court","False Bookshelf","Rooftop Signal","Sealed Well","Basement 13","Ticking Room","Blind Alley","Other Elevator","Ghost Station","Mirror Hall","Under Bridge Club","Negative Space","Service Art","Backwards Clock","Attic Signal","Chalk Code","Hidden Spring","Lost Platform","Walled Garden","Night Window","Rotating Wall","Cipher Café","Vanishing Point","Submarine Hatch","Underneath"]
+};
+const DESCS={
+  eat:["The chef hasn't changed the menu since day one.","Three generations. The recipe is classified.","Cash only. Line forms before dawn.","Smells like your grandmother's kitchen.","The portions are unreasonable. The prices are stuck in 2008.","Every surface is sticky. Every bite is transcendent.","They serve one thing. Perfectly.","Open since before the neighborhood had a name.","The secret menu requires repeat visits.","The wait staff has opinions and will share them uninvited.","Fluorescent lights, plastic chairs, best food you'll ever eat.","Menu written daily on butcher paper in terrible handwriting."],
+  shop:["The owner can source anything in 72 hours.","The system exists only in one person's mind.","Prices negotiable if you make eye contact with the cat first.","Everything here was made by hand. Some badly.","The back room has a different inventory entirely.","Cash preferred. Stories accepted as partial payment.","The bell above the door has announced every visitor since 1962.","The window display changes with the owner's mood.","Closed Tuesdays for 'inventory.' Code for fishing.","Specializes in things you didn't know you needed."],
+  transit:["The schedule is more of a suggestion.","The buskers have a residency, basically.","Built in 1931. The tile work alone is worth the fare.","Peak hours are a contact sport.","The elevator has been 'temporarily' out since 2019.","The mural tells the neighborhood history in 47 panels.","Last stop before the bridge.","The announcement system works. Nobody listens."],
+  culture:["The current exhibition has been 'closing soon' for eight months.","Free admission Thursdays. Different crowd entirely.","The acoustics were an accident.","One piece nobody can identify but everyone loves.","Open mic: transcendent or catastrophic.","The curator's taste is impeccable. The budget is not.","The building itself is the art.","The archives contain every local publication since 1955.","Founded by three artists who couldn't afford rent.","Classes every Saturday. Never starts on time."],
+  services:["Solved more problems than any politician.","Open 7 days. Closed once for a blizzard in 2014.","Run by volunteers. Somehow better than when funded.","They fix what others say can't be fixed.","Serves 400 people a week. Staffed by 3.","The suggestion box has been full since 2017.","The waiting room bookshelf reveals everything.","The hours on the door are aspirational."],
+  hidden:["You won't find this on any map. Except this one.","The entrance changes. Currently: through the laundromat.","Those who know don't talk. Those who talk don't know.","Discovered during plumbing repair in 1992.","The password changes. The vibe doesn't.","Known by every local. Listed in no directory.","Behind an unmarked door that looks like every other.","The city doesn't know this exists.","Membership earned, not bought.","Only open when the weather is 'right.'"]
+};
+const METAS={
+  eat:["Open Late","Cash Only","BYOB","Counter Only","NPC Hub","Since 1970s","Family-Run","Standing Room"],
+  shop:["Cash Preferred","Artist-Run","Dog Friendly","Estate Finds","One-of-Kind","Appointment Only"],
+  transit:["24 Hour","Accessible","Historic","Express","Night Service","Scenic Route"],
+  culture:["Free Entry","By Donation","Open Late","Artist-Run","Residency","Community Space"],
+  services:["Free","Walk-In","Volunteer-Run","Multilingual","Since 1985","Sliding Scale"],
+  hidden:["Underground","Invite Only","Seasonal","No Phone","Nocturnal","Members Only","Ephemeral"]
+};
+
+// ── GUIDE LAYER: 27 canonical POIs from guide.md ──
+const GUIDE_POIS=[
+  {cat:'eat',name:"Joe's Pizza",borough:'manhattan',x:275,y:360,desc:"No explanation needed. If you ask for a fork they will remember your face.",meta:['Since 1975','Cash Only','Guide Pick'],section:'Carmine St',guideSection:'II'},
+  {cat:'eat',name:"Russ & Daughters",borough:'manhattan',x:290,y:375,desc:"Lox, cream cheese, everything bagel. Operating since 1914.",meta:['Since 1914','Guide Pick'],section:'Houston St',guideSection:'II'},
+  {cat:'eat',name:"Los Tacos No. 1",borough:'manhattan',x:272,y:310,desc:"The adobada taco is a spiritual experience.",meta:['Cash Only','Guide Pick'],section:'Chelsea Market',guideSection:'II'},
+  {cat:'eat',name:"Lucali",borough:'brooklyn',x:355,y:465,desc:"BYOB pizza in Brooklyn. The wait is long. The pizza is why you waited.",meta:['BYOB','Guide Pick'],section:'Carroll Gardens',guideSection:'II'},
+  {cat:'eat',name:"Halal Guys",borough:'manhattan',x:290,y:260,desc:"The white sauce is the real currency of Midtown.",meta:['Open Late','Guide Pick'],section:'53rd & 6th',guideSection:'II'},
+  {cat:'eat',name:"Xi'an Famous Foods",borough:'manhattan',x:285,y:370,desc:"Hand-pulled noodles. The spicy cumin lamb.",meta:['Counter Only','Guide Pick'],section:'Multiple',guideSection:'II'},
+  {cat:'eat',name:"Peter Luger",borough:'brooklyn',x:365,y:420,desc:"Cash only. Porterhouse for two. Since 1887.",meta:['Since 1887','Cash Only','Guide Pick'],section:'Williamsburg',guideSection:'II'},
+  {cat:'eat',name:"Dimes",borough:'manhattan',x:295,y:385,desc:"Healthy-adjacent. The crowd is beautiful. The grain bowl is too.",meta:['Guide Pick'],section:'Canal St',guideSection:'II'},
+  {cat:'culture',name:"Woolworth Building",borough:'manhattan',x:288,y:405,desc:"Neo-Gothic. 1913. Cathedral of Commerce.",meta:['Historic','Guide Pick'],section:'233 Broadway',guideSection:'IV'},
+  {cat:'culture',name:"Vessel",borough:'manhattan',x:268,y:290,desc:"Love it or hate it, walk the stairs. 154 flights.",meta:['Guide Pick'],section:'Hudson Yards',guideSection:'IV'},
+  {cat:'culture',name:"Brooklyn Bridge",borough:'manhattan',x:295,y:415,desc:"Tourist trap by noon. Sacred ground at 6 AM.",meta:['Historic','Dawn','Guide Pick'],section:'Built 1869–1883',guideSection:'IV'},
+  {cat:'culture',name:"The High Line",borough:'manhattan',x:265,y:330,desc:"An elevated rail turned park. Whitney at the south entrance.",meta:['Free Entry','Guide Pick'],section:'1.45 miles',guideSection:'IV'},
+  {cat:'culture',name:"Top of the Rock",borough:'manhattan',x:298,y:255,desc:"You see the Empire State in your photo.",meta:['Guide Pick'],section:'30 Rock',guideSection:'IV'},
+  {cat:'culture',name:"Green-Wood Cemetery",borough:'brooklyn',x:400,y:550,desc:"478 acres. Basquiat is buried here.",meta:['Historic','Free Entry','Guide Pick'],section:'Est. 1838',guideSection:'IV'},
+  {cat:'shop',name:"Strand Bookstore",borough:'manhattan',x:285,y:340,desc:"18 miles of books.",meta:['Since 1927','Guide Pick'],section:'828 Broadway',guideSection:'V'},
+  {cat:'shop',name:"Canal Street Market",borough:'manhattan',x:282,y:380,desc:"Curated vendors. Gifts that don't look like NYC gifts.",meta:['Guide Pick'],section:'265 Canal St',guideSection:'V'},
+  {cat:'shop',name:"Brooklyn Flea",borough:'brooklyn',x:345,y:425,desc:"Vintage, design objects, random excellence.",meta:['Weekends Only','Guide Pick'],section:'DUMBO',guideSection:'V'},
+  {cat:'shop',name:"Kith",borough:'manhattan',x:278,y:365,desc:"Streetwear temple. The cereal bar is not ironic.",meta:['Guide Pick'],section:'337 Lafayette',guideSection:'V'},
+  {cat:'shop',name:"McNally Jackson",borough:'manhattan',x:280,y:368,desc:"Independent. Risograph station in the back.",meta:['Guide Pick'],section:'52 Prince St',guideSection:'V'},
+  {cat:'transit',name:"NYC Ferry — DUMBO",borough:'brooklyn',x:330,y:430,desc:"$4 and better views than any rooftop bar.",meta:['$4 Fare','Guide Pick'],section:'East River',guideSection:'III'},
+  {cat:'transit',name:"Citi Bike Hub",borough:'manhattan',x:285,y:275,desc:"Docks everywhere below 96th. Electric ones worth it.",meta:['14,500+ Bikes','Guide Pick'],section:'Docks citywide',guideSection:'III'},
+  {cat:'hidden',name:"Lower East Side",borough:'manhattan',x:300,y:380,desc:"Gritty-chic, late nights. Energy after midnight.",meta:['Nightlife','Guide Pick'],section:'Bars, music, vintage',guideSection:'VI'},
+  {cat:'hidden',name:"West Village",borough:'manhattan',x:270,y:355,desc:"Brownstone beautiful. Every corner is a movie set.",meta:['Walking','Guide Pick'],section:'Walking, eating',guideSection:'VI'},
+  {cat:'hidden',name:"Williamsburg",borough:'brooklyn',x:370,y:400,desc:"Brooklyn's main character. Rooftops face Manhattan.",meta:['Guide Pick'],section:'Coffee, records',guideSection:'VI'},
+  {cat:'hidden',name:"Harlem",borough:'manhattan',x:298,y:145,desc:"Soul and history. Gospel brunch, jazz, real food.",meta:['Guide Pick'],section:'Gospel, jazz',guideSection:'VI'},
+  {cat:'hidden',name:"Astoria",borough:'queens',x:420,y:195,desc:"Queens' quiet flex. 138 languages per borough.",meta:['Guide Pick'],section:'Greek food, diversity',guideSection:'VI'},
+  {cat:'hidden',name:"Red Hook",borough:'brooklyn',x:290,y:510,desc:"Industrial waterfront. Key Lime Pie at Steve's.",meta:['Guide Pick'],section:'Waterfront walks',guideSection:'VI'},
+];
+
+// ── Build world from seed ──
+const POIS=[];
+const trackedSet=new Set(); // tracked POI indices
+
+(function buildWorld(){
+  // 1. Insert guide POIs first (always present, canonical)
+  GUIDE_POIS.forEach((g,i)=>{
+    POIS.push({
+      ...g, id:i, numericId:i, isGuide:true, tracked:false,
+      hood:g.borough, hoodName:BOROUGHS.find(b=>b.id===g.borough)?.name||g.borough,
+      activity:0.7+rng.next()*0.3,
+      peakHours:[rng.int(8,14),rng.int(17,23)],
+      connections:[]
+    });
+  });
+
+  // 2. Generate procedural POIs (seeded)
+  const DIST={eat:50,shop:40,transit:25,culture:40,services:35,hidden:50};
+  let id=POIS.length;
+  const suffixes=['II','III','IV','East','West','North','South','Alt'];
+
+  for(const[cat,count]of Object.entries(DIST)){
+    const names=rng.shuffle([...NAMES[cat]]);
+    for(let i=0;i<count;i++){
+      const b=rng.pick(BOROUGHS);
+      const{x,y}=randInB(b);
+      const nm=names[i%names.length]+(i>=names.length?' '+suffixes[i%suffixes.length]:'');
+      const meta=rng.shuffle([...METAS[cat]]).slice(0,rng.int(1,3));
+      POIS.push({
+        id:id, numericId:id, name:nm, cat, hood:b.id, hoodName:b.name, x, y,
+        desc:rng.pick(DESCS[cat]), meta, isGuide:false, tracked:false,
+        activity:rng.next(),
+        peakHours:[rng.int(0,12),rng.int(12,23)],
+        connections:[]
+      });
+      id++;
+    }
+  }
+
+  // 3. Build connection graph (1-3 nearest neighbors within 40px)
+  POIS.forEach((p,i)=>{
+    const nearby=POIS.map((q,j)=>({j,d:Math.hypot(p.x-q.x,p.y-q.y)}))
+      .filter(q=>q.j!==i&&q.d<40).sort((a,b)=>a.d-b.d).slice(0,rng.int(1,3));
+    p.connections=nearby.map(n=>n.j);
+  });
+
+  console.log(`[NYC System] seed="${WORLD_SEED}" total=${POIS.length} guide=${GUIDE_POIS.length} generated=${POIS.length-GUIDE_POIS.length}`);
+})();
+
+// ── Tracking system ──
+function trackPoi(idx){
+  const p=POIS[idx];
+  if(trackedSet.has(idx)){
+    trackedSet.delete(idx); p.tracked=false;
+  }else{
+    trackedSet.add(idx); p.tracked=true;
+  }
+  renderTrackedPanel();
+  renderConnectionLines();
+  updateTrackBtn(idx);
+  document.getElementById('hb-tracked').textContent=trackedSet.size;
+}
+
+function renderTrackedPanel(){
+  const panel=document.getElementById('tracked-panel');
+  const list=document.getElementById('tracked-list');
+  if(trackedSet.size===0){panel.classList.remove('has-items');list.innerHTML='';return;}
+  panel.classList.add('has-items');
+  list.innerHTML=[...trackedSet].map(idx=>{
+    const p=POIS[idx];
+    return`<div class="tracked-item" onclick="selectPoi(${idx})"><span class="ti-dot" style="background:${CATS[p.cat].color}"></span><span class="ti-name">${p.name}</span><span class="ti-x" onclick="event.stopPropagation();trackPoi(${idx})">x</span></div>`;
+  }).join('');
+}
+
+function renderConnectionLines(){
+  let g=document.getElementById('layer-connections');
+  if(!g){
+    g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.id='layer-connections';
+    document.getElementById('map-svg').appendChild(g);
+  }
+  let s='';
+  trackedSet.forEach(idx=>{
+    const p=POIS[idx];
+    // Tracked ring
+    s+=`<circle cx="${p.x}" cy="${p.y}" r="12" class="tracked-ring"/>`;
+    // Connection lines to related POIs
+    p.connections.forEach(j=>{
+      const q=POIS[j];
+      s+=`<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" class="connection-line"/>`;
+    });
+  });
+  g.innerHTML=s;
+}
+
+function updateTrackBtn(idx){
+  const btn=document.getElementById('track-btn');
+  if(!btn)return;
+  const isTracked=trackedSet.has(idx);
+  btn.textContent=isTracked?'UNTRACK NODE':'TRACK NODE';
+  btn.classList.toggle('tracking',isTracked);
+}
+
+function getActivityForHour(p,hour){
+  const base=p.activity||0.5;
+  const[lo,hi]=p.peakHours||[10,20];
+  const inPeak=hour>=lo&&hour<=hi;
+  return Math.min(1,base*(inPeak?1:.3)+(p.volatility||0.2)*(rng.next()-.5));
+}
+
+// ════════════════════════════════════════════════════════
+//  3. SIMULATION ENGINE
+// ════════════════════════════════════════════════════════
+
+let simHour=14, simPlaying=false, simInterval=null;
+
+// ── Heat zones: intensity per borough per hour ──
+const HEAT_DATA={};
+BOROUGHS.forEach(b=>{
+  HEAT_DATA[b.id]=[];
+  for(let h=0;h<24;h++){
+    const base=R()*.3;
+    const peak=(h>=18&&h<=23)||(h>=0&&h<=2)?1:h>=7&&h<=9?.7:h>=11&&h<=14?.5:.3;
+    HEAT_DATA[b.id].push(Math.min(1,base+peak*R()));
+  }
+});
+
+// ── Events: spawn based on hour ──
+function getEvents(hour){
+  const events=[];
+  const types=[
+    {name:'Street Performance',hours:[10,22],color:'var(--purple)'},
+    {name:'Rush Hour Surge',hours:[7,9],color:'var(--amber)'},
+    {name:'Night Market',hours:[19,23],color:'var(--amber)'},
+    {name:'Incident Report',hours:[0,5],color:'var(--accent)'},
+    {name:'Cultural Event',hours:[14,20],color:'var(--purple)'},
+    {name:'Transit Delay',hours:[7,10],color:'var(--cat-transit)'},
+    {name:'Food Festival',hours:[11,15],color:'var(--cat-eat)'},
+  ];
+  types.forEach(t=>{
+    if(hour>=t.hours[0]&&hour<=t.hours[1]){
+      for(let i=0;i<RI(1,3);i++){
+        const b=pick(BOROUGHS);
+        const{x,y}=randInBorough(b);
+        events.push({name:t.name,x,y,color:t.color,borough:b.name});
+      }
+    }
+  });
+  return events;
+}
+
+// ════════════════════════════════════════════════════════
+//  4. RENDERING
+// ════════════════════════════════════════════════════════
+
+const SVG_W=650,SVG_H=650;
+let scale=1,tx=0,ty=0,dragging=false,dsx=0,dsy=0,ltx=0,lty=0;
+let activeFilters=new Set(Object.keys(CATS));
+let activePoi=null,activeBorough=null;
+
+const LAYERS={
+  boroughs:true,roads:true,subway:true,pois:true,heat:false,events:true,grid:false,stations:true
+};
+
+function renderMap(){
+  const svg=document.getElementById('map-svg');
+  svg.setAttribute('viewBox',`0 0 ${SVG_W} ${SVG_H}`);
+  let s='';
+
+  // Water
+  s+=`<rect x="-100" y="-100" width="${SVG_W+200}" height="${SVG_H+200}" class="water"/>`;
+
+  // Grid
+  s+=`<g id="layer-grid" style="display:${LAYERS.grid?'block':'none'}">`;
+  for(let x=0;x<SVG_W;x+=20)s+=`<line x1="${x}" y1="0" x2="${x}" y2="${SVG_H}" class="grid-line"/>`;
+  for(let y=0;y<SVG_H;y+=20)s+=`<line x1="0" y1="${y}" x2="${SVG_W}" y2="${y}" class="grid-line"/>`;
+  s+=`</g>`;
+
+  // Boroughs
+  s+=`<g id="layer-boroughs">`;
+  BOROUGHS.forEach(b=>{
+    s+=`<path d="${b.path}" fill="${b.fill}" stroke="${b.stroke}" stroke-width="1" class="borough" data-id="${b.id}"/>`;
+  });
+  s+=`</g>`;
+
+  // Roads
+  s+=`<g id="layer-roads" style="display:${LAYERS.roads?'block':'none'}">`;
+  // Highways
+  s+=`<path d="M180,470 L230,440 L270,420 L290,400 L295,370 L290,340 L288,310 L290,280 L295,250 L300,220 L310,190 L315,160 L310,130 L300,100 L295,80" class="road road-highway"/>`;
+  s+=`<path d="M260,490 L290,470 L320,445 L350,430 L380,420 L410,415 L440,420 L460,430 L475,450" class="road road-highway"/>`;
+  s+=`<path d="M270,340 L310,335 L340,330 L370,325 L400,320 L430,310 L460,300 L485,285" class="road road-highway"/>`;
+  // Major roads
+  s+=`<path d="M270,360 L290,358 L310,355 L330,360 L350,370 L370,380 L390,385" class="road road-major"/>`;
+  s+=`<path d="M280,300 L305,295 L325,290 L345,288 L365,290" class="road road-major"/>`;
+  s+=`<path d="M280,250 L300,248 L315,245 L330,240 L345,235" class="road road-major"/>`;
+  s+=`<path d="M310,400 L325,420 L340,435 L355,445 L370,450" class="road road-major"/>`;
+  s+=`<path d="M350,430 L360,450 L370,475 L380,500 L390,520" class="road road-major"/>`;
+  // Minor grids inside boroughs
+  BOROUGHS.forEach(b=>{
+    const bb=bbox(b.path);
+    for(let yy=bb.y0+8;yy<bb.y1;yy+=18){
+      s+=`<line x1="${bb.x0}" y1="${yy}" x2="${bb.x1}" y2="${yy}" class="road road-minor"/>`;
+    }
+  });
+  s+=`</g>`;
+
+  // Parks
+  s+=`<ellipse cx="295" cy="220" rx="18" ry="40" class="park"/>`;
+  s+=`<text x="295" y="222" text-anchor="middle" class="label" style="font-size:3.5px;fill:rgba(0,180,80,.2)">CENTRAL PARK</text>`;
+  s+=`<ellipse cx="370" cy="490" rx="20" ry="25" class="park"/>`;
+  s+=`<text x="370" y="492" text-anchor="middle" class="label" style="font-size:3px;fill:rgba(0,180,80,.2)">PROSPECT</text>`;
+
+  // Heat zones
+  s+=`<g id="layer-heat" style="display:${LAYERS.heat?'block':'none'}">`;
+  BOROUGHS.forEach(b=>{
+    const bb=bbox(b.path);
+    const intensity=HEAT_DATA[b.id][simHour];
+    for(let i=0;i<8;i++){
+      const hx=bb.x0+R()*(bb.x1-bb.x0);
+      const hy=bb.y0+R()*(bb.y1-bb.y0);
+      if(pip(hx,hy,b.path)){
+        const r=15+R()*25;
+        const a=intensity*.25*R();
+        s+=`<circle cx="${hx}" cy="${hy}" r="${r}" fill="rgba(255,${Math.floor(80-intensity*80)},0,${a})" class="heat-cell" data-borough="${b.id}"/>`;
+      }
+    }
+  });
+  s+=`</g>`;
+
+  // Subway lines
+  s+=`<g id="layer-subway" style="display:${LAYERS.subway?'block':'none'}">`;
+  SUBWAY_LINES.forEach(l=>{
+    s+=`<path d="${l.path}" class="subway-line" stroke="${l.color}" data-line="${l.id}"/>`;
+  });
+  s+=`</g>`;
+
+  // Subway stations
+  s+=`<g id="layer-stations" style="display:${LAYERS.stations?'block':'none'}">`;
+  SUBWAY_STATIONS.forEach((st,i)=>{
+    s+=`<circle cx="${st.x}" cy="${st.y}" r="3" class="subway-station" stroke="${SUBWAY_LINES.find(l=>l.id===st.lines[0])?.color||'#fff'}" data-station="${i}"/>`;
+  });
+  s+=`</g>`;
+
+  // Borough labels
+  s+=`<g id="layer-labels">`;
+  BOROUGHS.forEach(b=>{
+    const bb=bbox(b.path);
+    const cx=(bb.x0+bb.x1)/2,cy=(bb.y0+bb.y1)/2;
+    s+=`<text x="${cx}" y="${cy}" text-anchor="middle" class="label" style="font-size:6px">${b.name.toUpperCase()}</text>`;
+  });
+  s+=`</g>`;
+
+  // POIs
+  s+=`<g id="layer-pois" style="display:${LAYERS.pois?'block':'none'}">`;
+  POIS.forEach(p=>{
+    s+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="${CATS[p.cat].color}" stroke="rgba(0,0,0,.4)" stroke-width=".5" class="poi" data-id="${p.id}" data-cat="${p.cat}"/>`;
+  });
+  s+=`</g>`;
+
+  // Events
+  s+=`<g id="layer-events">`;
+  s+=`</g>`;
+
+  // Compass
+  s+=`<g transform="translate(30,610)">`;
+  s+=`<circle cx="0" cy="0" r="14" fill="rgba(0,0,0,.4)" stroke="rgba(255,255,255,.08)" stroke-width=".5"/>`;
+  s+=`<polygon points="0,-12 -2.5,-5 2.5,-5" fill="var(--accent)"/>`;
+  s+=`<polygon points="0,12 -2.5,5 2.5,5" fill="rgba(255,255,255,.15)"/>`;
+  s+=`<text x="0" y="-16" text-anchor="middle" style="font-family:var(--mono);font-size:5px;fill:var(--accent)">N</text>`;
+  s+=`</g>`;
+
+  svg.innerHTML=s;
+  attachMapEvents();
+  renderMinimap();
+  renderEvents();
+}
+
+function attachMapEvents(){
+  const svg=document.getElementById('map-svg');
+  svg.querySelectorAll('.borough').forEach(el=>{
+    el.addEventListener('click',e=>{e.stopPropagation();selectBorough(el.dataset.id);});
+    el.addEventListener('mouseenter',e=>showTip(e,BOROUGHS.find(b=>b.id===el.dataset.id).name));
+    el.addEventListener('mouseleave',hideTip);
+  });
+  svg.querySelectorAll('.poi').forEach(el=>{
+    el.addEventListener('click',e=>{e.stopPropagation();selectPoi(+el.dataset.id);});
+    el.addEventListener('mouseenter',e=>{showTip(e,POIS[+el.dataset.id].name);showConnectionGraph(+el.dataset.id);});
+    el.addEventListener('mouseleave',e=>{hideTip();if(activePoi!==null)showConnectionGraph(activePoi);else clearConnectionGraph();});
+  });
+  svg.querySelectorAll('.subway-station').forEach(el=>{
+    const st=SUBWAY_STATIONS[+el.dataset.station];
+    el.addEventListener('click',e=>{e.stopPropagation();selectStation(+el.dataset.station);});
+    el.addEventListener('mouseenter',e=>showTip(e,st.name+' Station'));
+    el.addEventListener('mouseleave',hideTip);
+  });
+  svg.addEventListener('click',e=>{
+    if(!e.target.closest('.poi')&&!e.target.closest('.borough')&&!e.target.closest('.subway-station'))deselect();
+  });
+}
+
+function renderMinimap(){
+  const mm=document.getElementById('mm-svg');
+  let s=`<rect x="0" y="0" width="800" height="900" fill="#080a0e"/>`;
+  BOROUGHS.forEach(b=>{s+=`<path d="${b.path}" fill="${b.fill}" stroke="${b.stroke}" stroke-width=".5"/>`;});
+  if(LAYERS.subway)SUBWAY_LINES.forEach(l=>{s+=`<path d="${l.path}" fill="none" stroke="${l.color}" stroke-width="1" opacity=".4"/>`;});
+  POIS.forEach(p=>{s+=`<circle cx="${p.x}" cy="${p.y}" r=".8" fill="${CATS[p.cat].color}" opacity=".3"/>`;});
+  s+=`<rect class="mm-vp" x="0" y="0" width="${SVG_W}" height="${SVG_H}"/>`;
+  mm.innerHTML=s;
+}
+
+function updateMiniVP(){
+  const vp=document.querySelector('.mm-vp');if(!vp)return;
+  const c=document.getElementById('map-area');
+  vp.setAttribute('x',-tx/scale);vp.setAttribute('y',-ty/scale);
+  vp.setAttribute('width',c.clientWidth/scale);vp.setAttribute('height',c.clientHeight/scale);
+}
+
+function renderEvents(){
+  const g=document.getElementById('layer-events');if(!g)return;
+  const events=getEvents(simHour);
+  g.innerHTML=events.map(ev=>`<circle cx="${ev.x}" cy="${ev.y}" r="10" fill="${ev.color}" opacity=".15" class="event-marker"/>`).join('');
+  document.getElementById('hb-events').textContent=events.length;
+}
+
+function renderLayerPanel(){
+  const el=document.getElementById('layer-panel');
+  const items=[
+    {id:'boroughs',label:'Boroughs',color:'var(--cyan)'},
+    {id:'roads',label:'Roads',color:'var(--amber)'},
+    {id:'subway',label:'Subway',color:'var(--magenta)'},
+    {id:'stations',label:'Stations',color:'var(--magenta)'},
+    {id:'pois',label:'POIs',color:'var(--green)'},
+    {id:'heat',label:'Heat Zones',color:'var(--accent)'},
+    {id:'events',label:'Events',color:'var(--purple)'},
+    {id:'grid',label:'Grid',color:'var(--muted)'},
+  ];
+  el.innerHTML=items.map(i=>`<div class="layer-toggle ${LAYERS[i.id]?'on':''}" data-layer="${i.id}" onclick="toggleLayer('${i.id}')"><span class="lt-dot" style="background:${i.color}"></span>${i.label}</div>`).join('');
+}
+
+function renderFilterBar(){
+  const el=document.getElementById('filter-bar');
+  let h=`<div class="cat-btn on" data-cat="all" onclick="toggleAllCats()"><span class="cb-dot" style="background:#fff"></span>All</div>`;
+  for(const[k,v]of Object.entries(CATS)){
+    h+=`<div class="cat-btn ${activeFilters.has(k)?'on':''}" data-cat="${k}" onclick="toggleCat('${k}')"><span class="cb-dot" style="background:${v.color}"></span>${v.label}</div>`;
+  }
+  el.innerHTML=h;
+}
+
+// ════════════════════════════════════════════════════════
+//  5. INTERACTIONS
+// ════════════════════════════════════════════════════════
+
+function selectPoi(id){
+  activePoi=id;activeBorough=null;
+  const p=POIS[id],cat=CATS[p.cat];
+  document.querySelectorAll('.poi').forEach(el=>el.classList.toggle('active',+el.dataset.id===id));
+  document.querySelectorAll('.borough').forEach(el=>el.classList.remove('active'));
+
+  // Build connections list
+  const connHtml=p.connections.length?`<div class="d-connections"><h5>Connected Nodes (${p.connections.length})</h5>${p.connections.map(j=>{const q=POIS[j];return`<div class="d-conn-item" onclick="selectPoi(${j})" onmouseenter="highlightConn(${j})" onmouseleave="clearConnHighlight()"><span class="dc-dot" style="background:${CATS[q.cat].color}"></span><div><span class="dc-name">${q.name}</span><span class="dc-cat"> · ${CATS[q.cat].label}</span></div></div>`;}).join('')}</div>`:'';
+
+  // Activity sparkline
+  const sparkHtml=`<div class="sparkline">${Array.from({length:24},(_,h)=>{const v=getActivityForHour(p,h);return`<div class="spark-bar${h===simHour?' current':''}" style="height:${Math.max(2,v*28)}px"></div>`;}).join('')}</div>`;
+
+  const d=document.getElementById('detail');
+  d.className='';
+  d.innerHTML=`
+    <div class="d-cat" style="color:${cat.color}">${p.isGuide?'◆ GUIDE · ':''}${cat.label}</div>
+    <div class="d-name">${p.name}</div>
+    <div class="d-hood">${p.hoodName}${p.section?' · '+p.section:''}</div>
+    <div class="d-desc">${p.desc}</div>
+    <div class="d-tags">${p.meta.map(m=>`<span class="d-tag">${m}</span>`).join('')}</div>
+    <button id="track-btn" class="${trackedSet.has(id)?'tracking':''}" onclick="trackPoi(${id})">${trackedSet.has(id)?'UNTRACK NODE':'TRACK NODE'}</button>
+    ${sparkHtml}
+    <div class="d-meta"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${cat.color};margin-right:5px;vertical-align:middle"></span>${cat.label} &middot; ${p.hoodName} &middot; POI #${p.id+1}</div>
+    <div class="d-coords">${p.x.toFixed(1)}, ${p.y.toFixed(1)}</div>
+    ${connHtml}`;
+  showConnectionGraph(id);
+  document.getElementById('sidebar').scrollTop=0;
+}
+
+function selectBorough(id){
+  activeBorough=id;activePoi=null;
+  const b=BOROUGHS.find(x=>x.id===id);
+  const bPois=POIS.filter(p=>p.hood===id&&activeFilters.has(p.cat));
+  document.querySelectorAll('.borough').forEach(el=>el.classList.toggle('active',el.dataset.id===id));
+  document.querySelectorAll('.poi').forEach(el=>el.classList.remove('active'));
+  const heatVal=HEAT_DATA[id][simHour];
+  const d=document.getElementById('detail');
+  d.className='';
+  d.innerHTML=`
+    <div class="d-cat" style="color:var(--cyan)">BOROUGH</div>
+    <div class="hd-title">${b.name}</div>
+    <div class="hd-sub">${bPois.length} visible POIs</div>
+    <div class="hd-desc">${b.desc}</div>
+    <div class="hd-stats">
+      <div class="hd-stat"><div class="hd-stat-label">Population</div><div class="hd-stat-val">${b.pop}</div></div>
+      <div class="hd-stat"><div class="hd-stat-label">Area</div><div class="hd-stat-val">${b.area}</div></div>
+      <div class="hd-stat"><div class="hd-stat-label">Density</div><div class="hd-stat-val">${b.density}</div></div>
+      <div class="hd-stat"><div class="hd-stat-label">Heat @${simHour}:00</div><div class="hd-stat-val" style="color:${heatVal>.6?'var(--accent)':'var(--cyan)'}">${(heatVal*100).toFixed(0)}%</div></div>
+    </div>
+    <div class="hd-list">${bPois.slice(0,40).map(p=>`<div class="hd-poi" onclick="selectPoi(${p.id})"><span class="hp-dot" style="background:${CATS[p.cat].color}"></span><div><div class="hp-name">${p.name}</div><div class="hp-cat">${CATS[p.cat].label}</div></div></div>`).join('')}${bPois.length>40?`<div style="padding:.5rem;font-family:var(--mono);font-size:.55rem;color:var(--muted)">+ ${bPois.length-40} more</div>`:''}</div>`;
+  document.getElementById('sidebar').scrollTop=0;
+}
+
+function selectStation(idx){
+  const st=SUBWAY_STATIONS[idx];
+  activePoi=null;activeBorough=null;
+  document.querySelectorAll('.poi,.borough').forEach(el=>el.classList.remove('active'));
+  const lines=st.lines.map(lid=>SUBWAY_LINES.find(l=>l.id===lid)).filter(Boolean);
+  const d=document.getElementById('detail');
+  d.className='';
+  d.innerHTML=`
+    <div class="d-cat" style="color:var(--cat-transit)">SUBWAY STATION</div>
+    <div class="d-name">${st.name}</div>
+    <div class="d-hood">Lines: ${lines.map(l=>`<span style="color:${l.color};font-weight:600">${l.name}</span>`).join(', ')}</div>
+    <div class="d-desc">Transfer station serving ${lines.length} line${lines.length>1?'s':''}. ${pick(DESCS.transit)}</div>
+    <div class="d-coords">${st.x}, ${st.y}</div>`;
+  document.getElementById('sidebar').scrollTop=0;
+}
+
+function deselect(){
+  activePoi=null;activeBorough=null;
+  document.querySelectorAll('.poi,.borough').forEach(el=>el.classList.remove('active'));
+  clearConnectionGraph();
+  const d=document.getElementById('detail');d.className='empty';
+  d.innerHTML='<div class="d-prompt">"The city is a system.<br>The map is the interface.<br>Every dot is alive."</div><div class="d-prompt-sub">GEOGRAPHIC + SIMULATION LAYERS</div>';
+}
+
+function toggleLayer(id){
+  LAYERS[id]=!LAYERS[id];
+  const el=document.getElementById('layer-'+id);
+  if(el)el.style.display=LAYERS[id]?'block':'none';
+  document.querySelector(`[data-layer="${id}"]`)?.classList.toggle('on',LAYERS[id]);
+  if(id==='heat')renderMap(); // re-render for heat
+}
+
+function toggleCat(cat){
+  activeFilters.has(cat)?activeFilters.delete(cat):activeFilters.add(cat);
+  applyFilters();renderFilterBar();
+}
+function toggleAllCats(){
+  const all=Object.keys(CATS);
+  activeFilters.size===all.length?activeFilters.clear():(activeFilters=new Set(all));
+  applyFilters();renderFilterBar();
+}
+function applyFilters(){
+  let vis=0;
+  document.querySelectorAll('.poi').forEach(el=>{
+    const show=activeFilters.has(el.dataset.cat);
+    el.classList.toggle('dimmed',!show);
+    if(show)vis++;
+  });
+  document.getElementById('hb-pois').textContent=vis;
+  if(activeBorough)selectBorough(activeBorough);
+}
+
+// ── Time controls ──
+function setHour(h){
+  simHour=h;
+  document.getElementById('time-slider').value=h;
+  document.getElementById('time-label').textContent=String(h).padStart(2,'0')+':00';
+  document.getElementById('hb-hour').textContent=String(h).padStart(2,'0')+':00';
+  renderEvents();
+  // Update heat
+  if(LAYERS.heat){
+    document.querySelectorAll('.heat-cell').forEach(el=>{
+      const bId=el.dataset.borough;
+      const intensity=HEAT_DATA[bId]?HEAT_DATA[bId][h]:0;
+      el.setAttribute('opacity',intensity*.25*R());
+    });
+  }
+  if(activeBorough)selectBorough(activeBorough);
+  if(survMode)updateSurvState();
+}
+
+function togglePlay(){
+  simPlaying=!simPlaying;
+  document.getElementById('time-play').textContent=simPlaying?'STOP':'PLAY';
+  document.getElementById('time-play').style.color=simPlaying?'var(--accent)':'var(--muted-light)';
+  if(simPlaying){
+    simInterval=setInterval(()=>{simHour=(simHour+1)%24;setHour(simHour);},1200);
+  }else{
+    clearInterval(simInterval);
+  }
+}
+
+// ── Tooltip ──
+function showTip(e,text){const t=document.getElementById('tooltip');t.textContent=text;t.style.display='block';t.style.left=(e.clientX+12)+'px';t.style.top=(e.clientY-8)+'px';}
+function hideTip(){document.getElementById('tooltip').style.display='none';}
+document.addEventListener('mousemove',e=>{const t=document.getElementById('tooltip');if(t.style.display==='block'){t.style.left=(e.clientX+12)+'px';t.style.top=(e.clientY-8)+'px';}});
+
+// ── Search ──
+const sInput=document.getElementById('search-input');
+const sResults=document.getElementById('search-results');
+sInput.addEventListener('input',function(){
+  const q=this.value.toLowerCase().trim();
+  if(q.length<2){sResults.classList.remove('open');return;}
+  const m=[];
+  BOROUGHS.forEach(b=>{if(b.name.toLowerCase().includes(q))m.push({t:'b',id:b.id,name:b.name,sub:'Borough',color:'var(--cyan)'});});
+  SUBWAY_STATIONS.forEach((st,i)=>{if(st.name.toLowerCase().includes(q))m.push({t:'s',id:i,name:st.name,sub:'Station',color:'var(--cat-transit)'});});
+  POIS.forEach(p=>{if(p.name.toLowerCase().includes(q))m.push({t:'p',id:p.id,name:p.name,sub:p.hoodName,color:CATS[p.cat].color});});
+  sResults.innerHTML=m.length?m.slice(0,12).map(x=>`<div class="sr-item" onclick="${x.t==='b'?`selectBorough('${x.id}')`:x.t==='s'?`selectStation(${x.id})`:`selectPoi(${x.id})`};clearSearch()"><span class="sr-dot" style="background:${x.color}"></span><div><div class="sr-name">${x.name}</div><div class="sr-sub">${x.sub}</div></div></div>`).join(''):'<div style="padding:.5rem;font-size:.7rem;color:var(--muted);font-style:italic">No results</div>';
+  sResults.classList.add('open');
+});
+sInput.addEventListener('focus',function(){if(this.value.length>=2)sResults.classList.add('open');});
+document.addEventListener('click',e=>{if(!e.target.closest('#search-bar'))sResults.classList.remove('open');});
+function clearSearch(){sInput.value='';sResults.classList.remove('open');}
+
+// ════════════════════════════════════════════════════════
+//  6. PAN / ZOOM
+// ════════════════════════════════════════════════════════
+
+function applyTransform(){
+  const svg=document.getElementById('map-svg');
+  svg.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
+  svg.style.transformOrigin='0 0';
+  document.getElementById('hb-zoom').textContent=scale.toFixed(1);
+  updateMiniVP();
+}
+function zoomBy(f,cx,cy){
+  const c=document.getElementById('map-area');
+  if(cx===undefined)cx=c.clientWidth/2;if(cy===undefined)cy=c.clientHeight/2;
+  const ns=Math.max(.3,Math.min(8,scale*f));
+  tx=cx-(cx-tx)*(ns/scale);ty=cy-(cy-ty)*(ns/scale);scale=ns;applyTransform();
+}
+function resetView(){
+  const c=document.getElementById('map-area');
+  scale=Math.min(c.clientWidth/SVG_W,c.clientHeight/SVG_H)*.85;
+  tx=(c.clientWidth-SVG_W*scale)/2;ty=(c.clientHeight-SVG_H*scale)/2+10;applyTransform();
+}
+
+const mc=document.getElementById('map-area');
+mc.addEventListener('mousedown',e=>{if(e.target.closest('button,input,a'))return;dragging=true;dsx=e.clientX;dsy=e.clientY;ltx=tx;lty=ty;mc.style.cursor='grabbing';});
+window.addEventListener('mousemove',e=>{if(!dragging)return;tx=ltx+(e.clientX-dsx);ty=lty+(e.clientY-dsy);applyTransform();});
+window.addEventListener('mouseup',()=>{dragging=false;mc.style.cursor='crosshair';});
+mc.addEventListener('wheel',e=>{e.preventDefault();const r=mc.getBoundingClientRect();zoomBy(e.deltaY>0?.9:1.1,e.clientX-r.left,e.clientY-r.top);},{passive:false});
+
+let ltDist=0,ltMid=null;
+mc.addEventListener('touchstart',e=>{if(e.touches.length===1){dragging=true;dsx=e.touches[0].clientX;dsy=e.touches[0].clientY;ltx=tx;lty=ty;}if(e.touches.length===2){dragging=false;ltDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);ltMid={x:(e.touches[0].clientX+e.touches[1].clientX)/2,y:(e.touches[0].clientY+e.touches[1].clientY)/2};}},{passive:true});
+mc.addEventListener('touchmove',e=>{e.preventDefault();if(e.touches.length===1&&dragging){tx=ltx+(e.touches[0].clientX-dsx);ty=lty+(e.touches[0].clientY-dsy);applyTransform();}if(e.touches.length===2&&ltDist){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);const mid={x:(e.touches[0].clientX+e.touches[1].clientX)/2,y:(e.touches[0].clientY+e.touches[1].clientY)/2};const r=mc.getBoundingClientRect();zoomBy(d/ltDist,mid.x-r.left,mid.y-r.top);tx+=mid.x-ltMid.x;ty+=mid.y-ltMid.y;applyTransform();ltDist=d;ltMid=mid;}},{passive:false});
+mc.addEventListener('touchend',()=>{dragging=false;ltDist=0;ltMid=null;});
+
+document.getElementById('minimap').addEventListener('click',function(e){
+  const r=this.getBoundingClientRect();const mx=(e.clientX-r.left)/r.width*SVG_W;const my=(e.clientY-r.top)/r.height*SVG_H;
+  const c=document.getElementById('map-area');tx=c.clientWidth/2-mx*scale;ty=c.clientHeight/2-my*scale;applyTransform();
+});
+
+// ════════════════════════════════════════════════════════
+//  7. CONNECTION GRAPH — Visual relationships
+// ════════════════════════════════════════════════════════
+
+function showConnectionGraph(id){
+  let g=document.getElementById('layer-conngraph');
+  if(!g){
+    g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.id='layer-conngraph';
+    document.getElementById('map-svg').appendChild(g);
+  }
+  const p=POIS[id];
+  let s='';
+  // Lines to connected POIs
+  p.connections.forEach(j=>{
+    const q=POIS[j];
+    s+=`<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" class="conn-line show"/>`;
+    s+=`<circle cx="${q.x}" cy="${q.y}" r="5" fill="none" stroke="${CATS[q.cat].color}" stroke-width="1" opacity=".5" class="conn-node show"/>`;
+  });
+  // 2nd-degree connections (faint)
+  p.connections.forEach(j=>{
+    POIS[j].connections.forEach(k=>{
+      if(k!==id&&!p.connections.includes(k)){
+        const q=POIS[j],r=POIS[k];
+        s+=`<line x1="${q.x}" y1="${q.y}" x2="${r.x}" y2="${r.y}" class="conn-line show" style="opacity:.12;stroke-dasharray:1,3"/>`;
+      }
+    });
+  });
+  g.innerHTML=s;
+}
+
+function clearConnectionGraph(){
+  const g=document.getElementById('layer-conngraph');
+  if(g)g.innerHTML='';
+}
+
+function highlightConn(id){
+  const p=POIS[id];
+  document.querySelectorAll('.poi').forEach(el=>{
+    el.style.filter=+el.dataset.id===id?'brightness(2)':'';
+  });
+}
+function clearConnHighlight(){
+  document.querySelectorAll('.poi').forEach(el=>el.style.filter='');
+}
+
+// ════════════════════════════════════════════════════════
+//  8. SURVEILLANCE MODE
+// ════════════════════════════════════════════════════════
+
+let survMode=false, survInterval=null, survCycleIdx=0;
+
+function setMode(mode){
+  survMode=mode==='surveillance';
+  document.body.classList.toggle('surveillance',survMode);
+  document.getElementById('mode-explore').classList.toggle('active',!survMode);
+  document.getElementById('mode-surv').classList.toggle('active',survMode);
+
+  // Update sidebar header
+  document.querySelector('#sidebar-head .mode').textContent=survMode?'SURVEILLANCE':'LIVE';
+
+  if(survMode){
+    startSurveillance();
+  }else{
+    stopSurveillance();
+    // Restore all POI opacity
+    document.querySelectorAll('.poi').forEach(el=>el.classList.remove('inactive'));
+  }
+}
+
+function startSurveillance(){
+  updateSurvState();
+  survInterval=setInterval(()=>{
+    survCycleIdx=(survCycleIdx+1)%POIS.length;
+    updateSurvState();
+    // Auto-advance to next active node every 3s
+    const activePois=POIS.filter(p=>getActivityForHour(p,simHour)>.5);
+    if(activePois.length>0){
+      const target=activePois[survCycleIdx%activePois.length];
+      selectPoi(target.id);
+      // Pan to node
+      const c=document.getElementById('map-area');
+      tx=c.clientWidth/2-target.x*scale;
+      ty=c.clientHeight/2-target.y*scale;
+      applyTransform();
+    }
+  },3000);
+}
+
+function stopSurveillance(){
+  clearInterval(survInterval);survInterval=null;
+}
+
+function updateSurvState(){
+  // Dim inactive POIs based on current hour activity
+  document.querySelectorAll('.poi').forEach(el=>{
+    const p=POIS[+el.dataset.id];
+    if(!p)return;
+    const act=getActivityForHour(p,simHour);
+    el.classList.toggle('inactive',act<.3);
+  });
+  // Update status
+  const status=document.getElementById('surv-status');
+  if(status){
+    const events=getEvents(simHour);
+    const activeCount=POIS.filter(p=>getActivityForHour(p,simHour)>.5).length;
+    status.textContent=`▣ SCANNING — ${activeCount} ACTIVE NODES — ${events.length} EVENTS — ${String(simHour).padStart(2,'0')}:00`;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  9. DEEP LINKING — ?focus=poi-name
+// ════════════════════════════════════════════════════════
+
+function handleDeepLink(){
+  const params=new URLSearchParams(location.search);
+  const focus=params.get('focus');
+  if(!focus)return;
+
+  // Match by id slug or name (fuzzy)
+  const slug=focus.toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  let match=POIS.findIndex(p=>{
+    const pSlug=(p.name||'').toLowerCase().replace(/[^a-z0-9]+/g,'-');
+    return pSlug===slug||pSlug.includes(slug);
+  });
+
+  // Also check guide IDs
+  if(match===-1){
+    match=POIS.findIndex(p=>{
+      const idSlug=String(p.id).toLowerCase();
+      return idSlug===slug;
+    });
+  }
+
+  if(match>=0){
+    const p=POIS[match];
+    selectPoi(match);
+    // Zoom in and center on the POI
+    const c=document.getElementById('map-area');
+    scale=3;
+    tx=c.clientWidth/2-p.x*scale;
+    ty=c.clientHeight/2-p.y*scale;
+    applyTransform();
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════
+
+function init(){
+  renderMap();
+  renderLayerPanel();
+  renderFilterBar();
+  resetView();
+  handleDeepLink();
+  window.addEventListener('resize',resetView);
+}
+window.addEventListener('load',init);
+</script>
+</body>
+</html>

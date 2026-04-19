@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NYC Best Structure — NPC City Map Reader</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --ink: #1a1a1a;
+  --paper: #f5f0e8;
+  --paper-dark: #e8e0d0;
+  --paper-light: #faf7f2;
+  --accent: #c4362c;
+  --accent-light: #e8d5d3;
+  --rule: #2a2a2a;
+  --muted: #6b6359;
+  --water: #c8dae8;
+  --water-deep: #a8c0d8;
+  --park: #c8ddb8;
+  --park-stroke: #a3c48e;
+  --serif: 'Playfair Display', Georgia, serif;
+  --sans: 'Inter', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --cat-eat: #c4362c;
+  --cat-shop: #d4920b;
+  --cat-transit: #3a6fa0;
+  --cat-culture: #2a7b5f;
+  --cat-services: #7a5195;
+  --cat-hidden: #555;
+  --sidebar-w: 380px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html { font-size:16px; -webkit-font-smoothing:antialiased; }
+body { background:var(--paper); color:var(--ink); font-family:var(--sans); overflow:hidden; height:100vh; width:100vw; }
+::selection { background:var(--accent); color:#fff; }
+
+#app { display:flex; height:100vh; width:100vw; }
+
+/* ── MAP CONTAINER ── */
+#map-container { flex:1; position:relative; overflow:hidden; cursor:grab; background:var(--water); }
+#map-container.dragging { cursor:grabbing; }
+#map-svg { position:absolute; top:0; left:0; }
+
+/* ── TOP BAR ── */
+#topbar {
+  position:absolute; top:0; left:0; right:0; z-index:20;
+  background:linear-gradient(to bottom, rgba(245,240,232,.97) 0%, rgba(245,240,232,.92) 70%, rgba(245,240,232,0) 100%);
+  padding:1rem 1.5rem .5rem;
+  pointer-events:none;
+}
+#topbar > * { pointer-events:auto; }
+#topbar-inner { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+#topbar h1 { font-family:var(--serif); font-size:1.1rem; font-weight:900; letter-spacing:-.01em; white-space:nowrap; }
+#topbar .dateline { font-family:var(--mono); font-size:.55rem; letter-spacing:.15em; color:var(--muted); }
+#nav-links { display:flex; gap:.75rem; align-items:center; }
+#nav-links a {
+  font-family:var(--mono); font-size:.65rem; letter-spacing:.08em; color:var(--ink);
+  text-decoration:none; padding:.35rem .65rem; border:1px solid rgba(0,0,0,.15); background:rgba(255,255,255,.7);
+  transition:all .15s;
+}
+#nav-links a:hover { background:var(--ink); color:var(--paper); }
+
+/* ── SEARCH ── */
+#search-wrap {
+  position:absolute; top:4.2rem; left:1.5rem; z-index:15;
+  display:flex; align-items:center; gap:0;
+}
+#search-input {
+  font-family:var(--mono); font-size:.75rem; padding:.5rem .75rem;
+  border:1px solid rgba(0,0,0,.15); border-right:none; background:rgba(255,255,255,.92);
+  outline:none; width:220px; color:var(--ink);
+}
+#search-input::placeholder { color:var(--muted); opacity:.6; }
+#search-clear {
+  font-family:var(--mono); font-size:.7rem; padding:.5rem .6rem;
+  border:1px solid rgba(0,0,0,.15); background:rgba(255,255,255,.92);
+  cursor:pointer; color:var(--muted);
+}
+#search-clear:hover { background:var(--ink); color:var(--paper); }
+#search-results {
+  position:absolute; top:100%; left:0; width:280px; max-height:300px; overflow-y:auto;
+  background:#fff; border:1px solid rgba(0,0,0,.12); display:none; z-index:30;
+  box-shadow:0 4px 20px rgba(0,0,0,.1);
+}
+#search-results.open { display:block; }
+.search-item {
+  padding:.6rem .75rem; cursor:pointer; border-bottom:1px solid rgba(0,0,0,.05);
+  font-size:.8rem; display:flex; align-items:center; gap:.5rem;
+}
+.search-item:hover { background:var(--paper); }
+.search-item .sdot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.search-item .sname { font-family:var(--serif); font-weight:600; }
+.search-item .shood { font-family:var(--mono); font-size:.6rem; color:var(--muted); }
+
+/* ── ZOOM CONTROLS ── */
+#zoom-controls {
+  position:absolute; bottom:1.5rem; left:1.5rem; z-index:10;
+  display:flex; flex-direction:column; gap:2px;
+}
+#zoom-controls button {
+  width:38px; height:38px; background:rgba(255,255,255,.92); border:1px solid rgba(0,0,0,.12);
+  font-family:var(--mono); font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:all .15s;
+}
+#zoom-controls button:hover { background:var(--ink); color:var(--paper); }
+
+/* ── MINIMAP ── */
+#minimap {
+  position:absolute; bottom:1.5rem; right:calc(var(--sidebar-w) + 1.5rem); z-index:10;
+  width:140px; height:180px; background:rgba(255,255,255,.9); border:1px solid rgba(0,0,0,.12);
+  overflow:hidden; cursor:pointer;
+}
+#minimap svg { width:100%; height:100%; }
+#minimap-viewport { fill:rgba(196,54,44,.12); stroke:var(--accent); stroke-width:2; }
+
+/* ── STAT BAR ── */
+#statbar {
+  position:absolute; bottom:1.5rem; left:50%; transform:translateX(-50%); z-index:10;
+  display:flex; gap:1.5rem; background:rgba(255,255,255,.92); border:1px solid rgba(0,0,0,.1);
+  padding:.5rem 1.25rem; font-family:var(--mono); font-size:.6rem; color:var(--muted);
+}
+.stat-item strong { color:var(--ink); font-weight:600; }
+
+/* ── SIDEBAR ── */
+#sidebar {
+  width:var(--sidebar-w); background:var(--paper-light); border-left:2px solid var(--ink);
+  overflow-y:auto; display:flex; flex-direction:column; flex-shrink:0;
+  scrollbar-width:thin; scrollbar-color:var(--paper-dark) transparent;
+}
+#sidebar::-webkit-scrollbar { width:6px; }
+#sidebar::-webkit-scrollbar-track { background:transparent; }
+#sidebar::-webkit-scrollbar-thumb { background:var(--paper-dark); border-radius:3px; }
+
+#sidebar-header {
+  padding:1.25rem 1.5rem; border-bottom:2px solid var(--ink); text-align:center;
+  background:#fff; position:sticky; top:0; z-index:5;
+}
+#sidebar-header h2 { font-family:var(--serif); font-size:1rem; font-weight:900; }
+#sidebar-header p { font-family:var(--mono); font-size:.55rem; letter-spacing:.15em; color:var(--muted); margin-top:.2rem; }
+
+/* ── LEGEND ── */
+#legend { padding:1rem 1.5rem; border-bottom:1px solid var(--paper-dark); background:rgba(255,255,255,.5); }
+#legend h4 { font-family:var(--mono); font-size:.6rem; letter-spacing:.2em; color:var(--muted); margin-bottom:.6rem; }
+#legend-items { display:flex; flex-wrap:wrap; gap:.4rem; }
+.legend-btn {
+  display:flex; align-items:center; gap:.35rem; padding:.3rem .6rem;
+  font-family:var(--mono); font-size:.65rem; cursor:pointer;
+  border:1px solid rgba(0,0,0,.1); background:rgba(255,255,255,.7);
+  transition:all .15s; border-radius:2px;
+}
+.legend-btn:hover { border-color:rgba(0,0,0,.3); }
+.legend-btn.active { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.legend-btn.active .ldot { border:1.5px solid var(--paper); }
+.legend-btn .ldot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+/* ── DETAIL PANEL ── */
+#detail { padding:1.5rem; flex:1; }
+#detail.empty { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:3rem 2rem; }
+#detail .prompt { font-family:var(--serif); font-style:italic; font-size:1rem; color:var(--muted); line-height:1.7; }
+#detail .prompt-sub { font-family:var(--mono); font-size:.65rem; color:var(--muted); margin-top:1rem; letter-spacing:.05em; opacity:.6; }
+#detail .cat-label { font-family:var(--mono); font-size:.6rem; letter-spacing:.2em; text-transform:uppercase; margin-bottom:.4rem; }
+#detail .poi-name { font-family:var(--serif); font-size:1.5rem; font-weight:900; line-height:1.2; margin-bottom:.35rem; }
+#detail .poi-hood { font-family:var(--mono); font-size:.7rem; color:var(--muted); letter-spacing:.05em; margin-bottom:1rem; }
+#detail .poi-desc { font-family:var(--serif); font-size:.95rem; line-height:1.8; margin-bottom:1.25rem; color:#333; }
+#detail .poi-meta { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:1.25rem; }
+#detail .meta-tag {
+  font-family:var(--mono); font-size:.6rem; padding:.25rem .5rem;
+  background:var(--paper); border:1px solid var(--paper-dark); letter-spacing:.05em;
+}
+#detail .poi-section { font-family:var(--mono); font-size:.7rem; color:var(--muted); border-top:1px solid var(--paper-dark); padding-top:1rem; line-height:1.8; }
+
+/* ── NEIGHBORHOOD PANEL ── */
+.hood-panel-title { font-family:var(--serif); font-size:1.3rem; font-weight:900; margin-bottom:.25rem; }
+.hood-panel-sub { font-family:var(--mono); font-size:.65rem; color:var(--muted); letter-spacing:.05em; margin-bottom:.75rem; }
+.hood-panel-desc { font-family:var(--serif); font-size:.9rem; line-height:1.7; color:#444; margin-bottom:1.25rem; }
+.hood-panel-list { display:flex; flex-direction:column; gap:0; }
+.hood-poi-item {
+  display:flex; align-items:center; gap:.6rem; padding:.6rem .5rem;
+  border-bottom:1px solid rgba(0,0,0,.05); cursor:pointer; transition:background .1s;
+}
+.hood-poi-item:hover { background:rgba(0,0,0,.03); }
+.hood-poi-item .hpi-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.hood-poi-item .hpi-name { font-family:var(--serif); font-size:.85rem; font-weight:600; }
+.hood-poi-item .hpi-cat { font-family:var(--mono); font-size:.55rem; color:var(--muted); letter-spacing:.05em; }
+
+/* ── ALL POI LIST ── */
+#poi-list-section { padding:0 1.5rem 1.5rem; }
+#poi-list-section h4 { font-family:var(--mono); font-size:.6rem; letter-spacing:.2em; color:var(--muted); margin-bottom:.5rem; padding-top:1rem; border-top:1px solid var(--paper-dark); }
+.poi-list-scroll { max-height:none; }
+
+/* ── FOOTER ── */
+#sidebar-footer {
+  padding:1rem 1.5rem; border-top:2px solid var(--ink); text-align:center;
+  font-family:var(--mono); font-size:.55rem; color:var(--muted); letter-spacing:.08em;
+  background:#fff; margin-top:auto;
+}
+#sidebar-footer a { color:var(--ink); text-decoration:none; }
+#sidebar-footer a:hover { text-decoration:underline; }
+
+/* ── SVG MAP STYLES ── */
+.hood-shape { transition:fill .2s, stroke .2s; cursor:pointer; }
+.hood-shape:hover { fill-opacity:.12; }
+.hood-shape.active { stroke-width:1.5; fill-opacity:.15; }
+.hood-label { font-family:var(--mono); letter-spacing:1.5px; fill:rgba(0,0,0,.45); pointer-events:none; text-transform:uppercase; }
+.poi-dot { cursor:pointer; transition:r .15s, opacity .15s; }
+.poi-dot:hover { r:6; }
+.poi-dot.active { r:7; stroke:#fff; stroke-width:2.5; }
+.poi-dot.dimmed { opacity:.08; pointer-events:none; }
+.poi-dot.hidden { display:none; }
+.road { fill:none; stroke:rgba(255,255,255,.25); stroke-linecap:round; }
+.road-major { stroke:rgba(255,255,255,.4); stroke-width:1.2; }
+.road-minor { stroke:rgba(255,255,255,.15); stroke-width:.5; }
+.water-body { fill:var(--water); }
+.water-deep { fill:var(--water-deep); }
+.park-fill { fill:var(--park); stroke:var(--park-stroke); stroke-width:.5; }
+.building-block { fill:rgba(0,0,0,.04); stroke:rgba(0,0,0,.06); stroke-width:.3; }
+
+/* ── TOOLTIP ── */
+#tooltip {
+  position:fixed; z-index:100; pointer-events:none; display:none;
+  background:#fff; border:1px solid rgba(0,0,0,.12); padding:.4rem .6rem;
+  font-family:var(--mono); font-size:.65rem; box-shadow:0 2px 12px rgba(0,0,0,.1);
+  max-width:200px; white-space:nowrap;
+}
+
+/* ── RESPONSIVE ── */
+@media(max-width:860px){
+  #app { flex-direction:column; }
+  #sidebar { width:100%; height:50vh; border-left:none; border-top:2px solid var(--ink); }
+  #map-container { height:50vh; }
+  #minimap { right:1rem; bottom:1rem; width:100px; height:130px; }
+  #statbar { display:none; }
+  :root { --sidebar-w:0px; }
+  #search-input { width:160px; }
+}
+</style>
+</head>
+<body>
+
+<div id="tooltip"></div>
+
+<div id="app">
+  <div id="map-container">
+    <!-- Top bar -->
+    <div id="topbar">
+      <div id="topbar-inner">
+        <div>
+          <h1>NYC BEST STRUCTURE</h1>
+          <div class="dateline">NPC CITY MAP READER — VOL. 1 — 300 POINTS OF INTEREST</div>
+        </div>
+        <div id="nav-links">
+          <a href="/">LANDING</a>
+          <a href="/read">READ</a>
+          <a href="/npc-map.html" style="background:var(--ink);color:var(--paper)">MAP</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div id="search-wrap">
+      <input id="search-input" type="text" placeholder="Search POIs or neighborhoods..." autocomplete="off">
+      <button id="search-clear" onclick="clearSearch()">CLR</button>
+      <div id="search-results"></div>
+    </div>
+
+    <!-- Map SVG injected by JS -->
+    <svg id="map-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <!-- Zoom -->
+    <div id="zoom-controls">
+      <button onclick="zoomBy(1.3)" title="Zoom in">+</button>
+      <button onclick="zoomBy(0.7)" title="Zoom out">&minus;</button>
+      <button onclick="resetView()" title="Reset" style="font-size:.6rem">FIT</button>
+    </div>
+
+    <!-- Minimap -->
+    <div id="minimap">
+      <svg id="minimap-svg" viewBox="0 0 600 900"></svg>
+    </div>
+
+    <!-- Stats -->
+    <div id="statbar">
+      <div class="stat-item"><strong id="stat-visible">300</strong> visible</div>
+      <div class="stat-item"><strong>12</strong> neighborhoods</div>
+      <div class="stat-item">zoom <strong id="stat-zoom">1.0</strong>x</div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h2>MAP READER</h2>
+      <p>CLICK A POINT OR NEIGHBORHOOD TO EXPLORE</p>
+    </div>
+    <div id="legend">
+      <h4>FILTER BY CATEGORY</h4>
+      <div id="legend-items"></div>
+    </div>
+    <div id="detail" class="empty">
+      <div class="prompt">"Every block has a frequency.<br>Every NPC has a story.<br>This map tunes you in."</div>
+      <div class="prompt-sub">300 POIs across 12 neighborhoods</div>
+    </div>
+    <div id="poi-list-section"></div>
+    <div id="sidebar-footer">
+      NYC BEST STRUCTURE 2026 &middot; INSCRIBED ON BITCOIN<br>
+      <a href="/">Home</a> / <a href="/read">Read</a> / <a href="/npc-map.html">Map</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  DATA GENERATION
+// ════════════════════════════════════════════════
+
+const CATEGORIES = {
+  eat:      { color:'#c4362c', label:'Eat',      icon:'●' },
+  shop:     { color:'#d4920b', label:'Shop',     icon:'●' },
+  transit:  { color:'#3a6fa0', label:'Transit',  icon:'●' },
+  culture:  { color:'#2a7b5f', label:'Culture',  icon:'●' },
+  services: { color:'#7a5195', label:'Services', icon:'●' },
+  hidden:   { color:'#555555', label:'Hidden',   icon:'●' }
+};
+
+const NEIGHBORHOODS = [
+  {
+    id:'iron-bend', name:'Iron Bend', desc:'A waterfront district of converted warehouses, where cranes still creak and the smell of salt never fades. Longshoremen share coffee with gallery owners.',
+    path:'M60,320 L160,280 L200,310 L210,380 L180,430 L120,450 L60,410 Z',
+    cx:135, cy:370, fill:'#e8ddd0', stroke:'#bfb09a'
+  },
+  {
+    id:'the-narrows', name:'The Narrows', desc:'Tight alleys and tighter secrets. Everything here is vertical — the buildings, the ambition, the rents. Three-story walkups stacked like arguments.',
+    path:'M200,310 L310,270 L340,320 L330,400 L280,420 L210,380 Z',
+    cx:280, cy:350, fill:'#dde0d4', stroke:'#b5baa6'
+  },
+  {
+    id:'glassway', name:'Glassway', desc:'The financial corridor. Floor-to-ceiling windows reflect other floor-to-ceiling windows. The NPCs here wear lanyards like medals.',
+    path:'M310,270 L430,240 L460,290 L450,370 L340,320 Z',
+    cx:395, cy:300, fill:'#d4dce4', stroke:'#a8b8c8'
+  },
+  {
+    id:'verdant-hill', name:'Verdant Hill', desc:'Tree-lined avenues and brownstones that predate the city charter. The park at the center has hosted protests, picnics, and one very famous proposal.',
+    path:'M160,280 L310,270 L340,220 L280,160 L180,170 L140,220 Z',
+    cx:245, cy:220, fill:'#d4e4d0', stroke:'#a8c8a0'
+  },
+  {
+    id:'copper-row', name:'Copper Row', desc:'Named for the patina on every fire escape. Art studios occupy the floors that dentists abandoned. The murals change weekly.',
+    path:'M180,170 L280,160 L320,100 L260,50 L180,60 L150,110 Z',
+    cx:230, cy:110, fill:'#e4d8cc', stroke:'#c8b8a4'
+  },
+  {
+    id:'north-gate', name:'North Gate', desc:'The old entrance to the city, now a sprawl of bodegas and bus stops. Six languages spoken per block. The best empanadas anywhere.',
+    path:'M260,50 L320,100 L420,80 L440,30 L360,10 L280,15 Z',
+    cx:350, cy:55, fill:'#ddd4cc', stroke:'#c0b0a0'
+  },
+  {
+    id:'loom-district', name:'Loom District', desc:'Former textile factories now house coders, ceramicists, and one extremely persistent pigeon colony. The WiFi is excellent.',
+    path:'M320,100 L280,160 L340,220 L430,240 L460,180 L420,80 Z',
+    cx:380, cy:165, fill:'#dce0e4', stroke:'#b0b8c4'
+  },
+  {
+    id:'ashton-cross', name:'Ashton Cross', desc:'The crossroads. Five transit lines converge here, and so does every rumor. The clock tower has been wrong since 1987 and nobody minds.',
+    path:'M430,240 L460,180 L560,200 L570,280 L520,310 L460,290 Z',
+    cx:505, cy:250, fill:'#e0dcd4', stroke:'#c0b8a8'
+  },
+  {
+    id:'the-shelf', name:'The Shelf', desc:'Built on a geological shelf that drops 40 feet at its southern edge. The views are incredible. The staircases are brutal.',
+    path:'M450,370 L520,310 L580,340 L590,440 L540,480 L460,450 Z',
+    cx:525, cy:400, fill:'#d8dce0', stroke:'#b0b8c0'
+  },
+  {
+    id:'midnight-quarter', name:'Midnight Quarter', desc:'Nothing opens before noon. Everything closes after 4AM. The neon reflects off wet cobblestone like a permanent sunset.',
+    path:'M330,400 L450,370 L460,450 L440,510 L360,520 L280,480 L280,420 Z',
+    cx:380, cy:460, fill:'#d8d0dc', stroke:'#b4a8c0'
+  },
+  {
+    id:'canal-ward', name:'Canal Ward', desc:'The old canal was paved over in 1923 but the streets still flood on schedule. Restaurants serve dishes from countries that no longer exist.',
+    path:'M120,450 L180,430 L210,380 L280,420 L280,480 L240,540 L160,550 L100,510 Z',
+    cx:195, cy:475, fill:'#d4ddd8', stroke:'#a4b8ac'
+  },
+  {
+    id:'ember-flats', name:'Ember Flats', desc:'Rebuilt after the fire of 1948. Everything here is fireproof and slightly paranoid. The community garden grows ghost peppers exclusively.',
+    path:'M240,540 L360,520 L400,580 L370,650 L280,660 L210,620 L200,570 Z',
+    cx:295, cy:595, fill:'#e4dcd0', stroke:'#c8b8a4'
+  },
+];
+
+// ── POI name generators ──
+const EAT_NAMES = [
+  "The Copper Kettle","Midnight Ramen","Sal's Forever","Ninth Plate","The Burning Loaf","Grandma Lien's",
+  "Two Forks","The Quiet Noodle","Brick & Broth","Route 9 Diner","Pho Midnight","The Last Dumpling",
+  "Salt Cathedral","Ember Grill","The Standing Room","Paper Lantern","Six Spoons","The Yolk",
+  "Carbon Café","Ancestors' Table","The Grateful Bread","Iron Wok","The Green Ledger","Bao Down",
+  "Clementine's","The Slow Roast","King of Falafel","Pearl Oyster Bar","The Folding Table",
+  "Cinnamon Republic","Night Market Corner","The Brined Pig","Lemon Theory","Oat & Iron",
+  "The Humming Bowl","Basil Republic","Curry Mile Express","The Open Flame","Tomorrow's Lunch",
+  "Twice Baked","The Wandering Fork","Smoke & Oak","Bean Counter Café","The Rice Paper",
+  "Old Salt Tavern","The Cornbread Society","Mapo Collective","Five Alarm Taco","Root & Branch",
+  "The Ceramic Bowl","Anchovy Social Club","Dawn Patrol Coffee","The Half Shell","Vinegar Hill Deli",
+  "Peppercorn Treaty","The Brass Ladle","Sesame Door","Walnut & Vine","The Porridge King"
+];
+
+const SHOP_NAMES = [
+  "Almanac Books","The Bolt Hole","Curio Cabinet","Thread & Needle","The Map Room",
+  "Dusty Volumes","Iron & Oak","The Paper Trail","Signal Vintage","Compass & Key",
+  "The Specimen Jar","Ledger & Co","Patina Hardware","The Clock Doctor","Archive Supply",
+  "Tandem Cycles","The Stamp Room","Loom & Shuttle","Brass Tacks","The Pencil Case",
+  "Meridian Records","The Frame Shop","Salvage Yard","Ink & Thorn","The Cobbler's Bench",
+  "Binary Thrift","Canopy Plants","The Resin Studio","Found Objects","The Glassblower",
+  "Axiom Design","The Wax Seal","Typewriter Revival","Atlas Outfitters","The Darning Egg",
+  "Filament & Flux","The Bookbinder","Parallel Goods","Threshold Home","The Cork Board"
+];
+
+const TRANSIT_NAMES = [
+  "Iron Bend Station","Narrows Junction","Glassway Express","Verdant Line Stop","Copper Row Platform",
+  "North Gate Terminal","Loom District Hub","Ashton Cross Interchange","Shelf Line Station","Midnight Express",
+  "Canal Ward Dock","Ember Flats Stop","Ferry Landing 7","Crosstown Tram","The Elevated",
+  "Bus Depot 14","Bicycle Hub East","Water Taxi Pier","The Funicular","Cable Car Summit",
+  "Freight Bypass","The Turnaround","Express Platform 3","Night Bus Terminal","The Causeway",
+  "Commuter Dock","Trolley Barn","The Switch Yard","Overpass Station","Bridge Approach"
+];
+
+const CULTURE_NAMES = [
+  "The Parallax Gallery","Municipal Archives","Sound Library","The Reel Room","Kiln Collective",
+  "The Open Score","Monument Steps","The Broadside Press","Fresco Hall","The Listening Room",
+  "Sculpture Yard","Camera Obscura","The Revival Theater","Mosaic Workshop","Print Union",
+  "The Darkroom","Public Radio Tower","The Cipher Wall","Dance Floor Archive","Mural Corridor",
+  "The Phonograph","Poetry Kiosk","The Light Box","Orchestra Pit","The Gazette Office",
+  "Zine Library","The Projection Room","Ceramic Archive","The Stage Door","Rhythm Section",
+  "The Letterpress","Film Vault","Chalk Walk","The Resonance Chamber","Puppet Theater",
+  "The Stencil House","Living Wall Gallery","Radio Basement","The Woodcut Studio","Atelier 9"
+];
+
+const SERVICES_NAMES = [
+  "The Registrar","Postal Annex 3","Dr. Chen's Office","Clock Repair","The Notary",
+  "Mutual Aid Post","Tool Library","Community Laundry","The Barber's Chair","Fix-It Clinic",
+  "Public Bath House","The Apothecary","Key & Lock","Message Board Central","The Cobbler",
+  "Repair Café","Public Fountain","The Info Booth","Community Fridge","Social Services Hub",
+  "Night Clinic","The Tailor","Bike Repair Co-op","Mail Drop 7","The Switchboard",
+  "Public Darkroom","The Dispatcher","Community Oven","Free Library Box","The Mediator"
+];
+
+const HIDDEN_NAMES = [
+  "The Unmarked Door","Tunnel Entrance 4","The Whispering Wall","Substation Z","The Hollow Stump",
+  "Forgotten Courtyard","The False Bookshelf","Rooftop Frequency","The Sealed Well","Basement 13",
+  "The Ticking Room","Blind Alley Garden","The Other Elevator","Ghost Station","The Mirror Hall",
+  "Under the Bridge Club","The Negative Space","Service Tunnel Art","The Backwards Clock","Attic Signal",
+  "The Chalk Code","Hidden Spring","The Lost Platform","Walled Garden","The Night Window",
+  "Submarine Hatch","The Rotating Wall","Cipher Café","The Vanishing Point","Underneath"
+];
+
+const NAME_POOLS = { eat:EAT_NAMES, shop:SHOP_NAMES, transit:TRANSIT_NAMES, culture:CULTURE_NAMES, services:SERVICES_NAMES, hidden:HIDDEN_NAMES };
+
+// ── Description generators ──
+const DESC_TEMPLATES = {
+  eat: [
+    "The chef hasn't changed the menu since opening day. Nobody's complained.",
+    "Three generations of the same family. The recipe is a state secret.",
+    "Cash only. The line forms before dawn. Worth every minute.",
+    "The NPCs here argue about seasoning like it's constitutional law.",
+    "The owner remembers every regular's order. Including yours, somehow.",
+    "A fluorescent-lit room with the best [FOOD] you'll ever have. No ambiance needed.",
+    "They serve one thing. They serve it perfectly. Don't ask for substitutions.",
+    "The menu is handwritten daily on butcher paper. The handwriting is terrible. The food is not.",
+    "Smells like your grandmother's kitchen, even if your grandmother never cooked this.",
+    "The NPCs at the counter have been debating the same topic since 2003.",
+    "Open since before the neighborhood had a name. May outlast the neighborhood.",
+    "The secret menu isn't written down. You have to earn it through repeat visits.",
+    "The portions are unreasonable. The prices are stuck in 2008. God bless.",
+    "Every surface is sticky. Every bite is transcendent. That's the deal.",
+    "The wait staff has opinions and they will share them with you uninvited."
+  ],
+  shop: [
+    "The owner can source anything if you give them 72 hours and don't ask questions.",
+    "Floor to ceiling inventory. The organizational system exists only in one NPC's mind.",
+    "Prices are negotiable if you make eye contact with the cat first.",
+    "Specializes in things you didn't know you needed until you saw them here.",
+    "The back room has a different inventory entirely. Ask nicely.",
+    "Everything here was made by hand. Some of it was made by hand very badly. That's part of the charm.",
+    "Cash preferred. Stories accepted as partial payment.",
+    "The bell above the door has announced every visitor since 1962.",
+    "The window display changes with the owner's mood. Currently: contemplative.",
+    "Closed Tuesdays for inventory, which is code for fishing."
+  ],
+  transit: [
+    "The schedule is more of a suggestion. The pigeons are always on time.",
+    "Transfer point for three lines. The buskers here have a residency, basically.",
+    "The mural on platform 2 tells the history of the neighborhood in 47 panels.",
+    "Peak hours are a contact sport. Off-peak is meditative.",
+    "The announcement system works perfectly. Nobody listens to it anyway.",
+    "Built in 1931. The tile work alone is worth the fare.",
+    "The last stop before the bridge. NPCs here always look like they're deciding something.",
+    "The elevator has been 'temporarily' out of service since 2019."
+  ],
+  culture: [
+    "The current exhibition has been 'closing soon' for eight months.",
+    "Free admission on Thursdays. The NPCs who come on Thursdays are a different crowd entirely.",
+    "The acoustics were an accident. The architect insists they were intentional.",
+    "Founded by three artists who couldn't afford rent separately. Now none of them can afford it together.",
+    "The permanent collection includes one piece that nobody can identify but everyone loves.",
+    "Open mic night is either transcendent or catastrophic. No middle ground.",
+    "The curator's taste is impeccable. The curator's budget is not.",
+    "The building itself is the art. Everything inside is just commentary.",
+    "Classes run every Saturday. The instructor has never once started on time.",
+    "The archives contain every issue of every local publication since 1955."
+  ],
+  services: [
+    "The NPC behind the counter has solved more problems than any elected official.",
+    "Open 7 days. Closed only for a blizzard in 2014 and 'personal reasons' in 2021.",
+    "The waiting room has a community bookshelf. The selection reveals everything about the neighborhood.",
+    "They fix what others say can't be fixed. Bring your own reasonable expectations.",
+    "Run by volunteers since the funding dried up. Somehow better than when it was funded.",
+    "The hours posted on the door are aspirational. Call ahead.",
+    "Serves 400 people a week. Staffed by 3. Do the math.",
+    "The suggestion box is full. It's been full since 2017. They check it."
+  ],
+  hidden: [
+    "You won't find this on any map. Except this one.",
+    "The entrance changes location every few months. Currently: through the laundromat.",
+    "Only open when the weather is right. The definition of 'right' is private.",
+    "The NPCs who know about this don't talk about it. The ones who talk about it don't really know.",
+    "Discovered during a plumbing repair in 1992. Left mostly as-found.",
+    "The password changes. The vibe doesn't.",
+    "Listed in no directory. Known by every local. That's the whole system.",
+    "Behind an unmarked door that looks like every other door on the block. That's the point.",
+    "The city doesn't know this exists. The city is better for it.",
+    "Membership is earned, not bought. The criteria are unclear and possibly made up."
+  ]
+};
+
+const META_OPTIONS = {
+  eat: ["Open Late","Cash Only","BYOB","Counter Service","James Beard Semifinalist","NPC Hub","Since 1970s","Outdoor Seating","Family-Run","Standing Room Only"],
+  shop: ["Cash Preferred","Appointment Only","Open Weekends","Underground","Artist-Run","By Donation","Estate Sale Finds","One-of-a-Kind","NPC Hub","Dog Friendly"],
+  transit: ["24 Hour","Peak Only","Accessible","Historic","Express","ADA Elevator","Night Service","NPC Hub","Scenic Route","Transfer Point"],
+  culture: ["Free Admission","By Donation","Open Late","Artist-Run","Underground","NPC Hub","Historic Building","Residency Program","Community Space","Grant-Funded"],
+  services: ["Free","Sliding Scale","Walk-In","By Appointment","Volunteer-Run","NPC Hub","Multilingual","Community-Owned","Open Late","Since 1985"],
+  hidden: ["Underground","Invite Only","Seasonal","No Phone","Password Required","NPC Hub","Off-Grid","Nocturnal","Ephemeral","Members Only"]
+};
+
+// Seeded random for reproducibility
+let _seed = 42;
+function rand(){ _seed=((_seed*16807)%2147483647); return(_seed-1)/2147483646; }
+function randInt(a,b){ return Math.floor(rand()*(b-a+1))+a; }
+function pick(arr){ return arr[Math.floor(rand()*arr.length)]; }
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+// Point-in-polygon test
+function pointInPoly(px,py,path){
+  const pts = path.match(/[\d.]+/g).map(Number);
+  const poly=[];
+  for(let i=0;i<pts.length;i+=2) poly.push([pts[i],pts[i+1]]);
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const [xi,yi]=poly[i],[xj,yj]=poly[j];
+    if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+function generatePOIs(){
+  const pois = [];
+  const catKeys = Object.keys(CATEGORIES);
+  const distribution = { eat:75, shop:50, transit:30, culture:50, services:40, hidden:55 };
+  let id = 0;
+
+  for(const cat of catKeys){
+    const count = distribution[cat];
+    const names = shuffle([...NAME_POOLS[cat]]);
+    const descs = DESC_TEMPLATES[cat];
+    const metas = META_OPTIONS[cat];
+
+    for(let i=0; i<count; i++){
+      const hood = NEIGHBORHOODS[Math.floor(rand()*NEIGHBORHOODS.length)];
+      // Generate point inside neighborhood polygon
+      let px, py, attempts=0;
+      const pts = hood.path.match(/[\d.]+/g).map(Number);
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+      for(let k=0;k<pts.length;k+=2){ minX=Math.min(minX,pts[k]);maxX=Math.max(maxX,pts[k]);minY=Math.min(minY,pts[k+1]);maxY=Math.max(maxY,pts[k+1]); }
+      do {
+        px = minX + rand()*(maxX-minX);
+        py = minY + rand()*(maxY-minY);
+        attempts++;
+      } while(!pointInPoly(px,py,hood.path) && attempts<50);
+      if(attempts>=50){ px=hood.cx; py=hood.cy; }
+
+      // Add some jitter
+      px += (rand()-.5)*8;
+      py += (rand()-.5)*8;
+
+      const name = names[i % names.length] + (i >= names.length ? ` ${['II','III','IV','V','East','West','North','South'][i%8]}` : '');
+      const desc = descs[Math.floor(rand()*descs.length)];
+      const numMeta = randInt(1,3);
+      const meta = [];
+      const shuffledMeta = shuffle([...metas]);
+      for(let m=0;m<numMeta;m++) meta.push(shuffledMeta[m]);
+
+      pois.push({
+        id: id++,
+        name,
+        cat,
+        hood: hood.id,
+        hoodName: hood.name,
+        x: Math.round(px*10)/10,
+        y: Math.round(py*10)/10,
+        desc,
+        meta
+      });
+    }
+  }
+  return pois;
+}
+
+const POIS = generatePOIs();
+
+// ════════════════════════════════════════════════
+//  RENDERING
+// ════════════════════════════════════════════════
+
+const SVG_W = 650, SVG_H = 700;
+let scale=1, tx=0, ty=0, dragging=false, dragStartX=0, dragStartY=0, lastTx=0, lastTy=0;
+let activeFilters = new Set(Object.keys(CATEGORIES));
+let activePoi = null, activeHood = null;
+
+function renderMap(){
+  const svg = document.getElementById('map-svg');
+  svg.setAttribute('viewBox', `0 0 ${SVG_W} ${SVG_H}`);
+  let s = '';
+
+  // Background water
+  s += `<rect x="-50" y="-50" width="${SVG_W+100}" height="${SVG_H+100}" class="water-body"/>`;
+
+  // Water features
+  s += `<ellipse cx="30" cy="400" rx="60" ry="200" class="water-deep" opacity=".4"/>`;
+  s += `<ellipse cx="600" cy="350" rx="70" ry="250" class="water-deep" opacity=".3"/>`;
+  s += `<path d="M160,550 Q200,530 240,540 Q260,570 200,580 Z" class="water-deep" opacity=".3"/>`;
+
+  // Neighborhood fills
+  NEIGHBORHOODS.forEach(h => {
+    s += `<path d="${h.path}" fill="${h.fill}" stroke="${h.stroke}" stroke-width="1" class="hood-shape" data-hood="${h.id}" opacity=".85"/>`;
+  });
+
+  // Street grid per neighborhood
+  NEIGHBORHOODS.forEach(h => {
+    const pts = h.path.match(/[\d.]+/g).map(Number);
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    for(let k=0;k<pts.length;k+=2){ minX=Math.min(minX,pts[k]);maxX=Math.max(maxX,pts[k]);minY=Math.min(minY,pts[k+1]);maxY=Math.max(maxY,pts[k+1]); }
+    const angle = (rand()-.5)*.3;
+    for(let y=minY;y<maxY;y+=12){
+      s += `<line x1="${minX}" y1="${y}" x2="${maxX}" y2="${y+angle*40}" class="road road-minor"/>`;
+    }
+    for(let x=minX;x<maxX;x+=14){
+      s += `<line x1="${x}" y1="${minY}" x2="${x+angle*30}" y2="${maxY}" class="road road-minor"/>`;
+    }
+  });
+
+  // Major roads
+  s += `<path d="M100,400 Q250,350 400,300 Q500,270 580,260" class="road road-major" stroke-width="1.5"/>`;
+  s += `<path d="M200,50 Q220,200 250,350 Q270,500 290,650" class="road road-major" stroke-width="1.5"/>`;
+  s += `<path d="M60,350 Q200,420 350,460 Q450,490 550,480" class="road road-major" stroke-width="1.2"/>`;
+  s += `<path d="M350,10 Q380,150 400,300 Q420,450 400,600" class="road road-major" stroke-width="1.2"/>`;
+
+  // Parks
+  s += `<ellipse cx="245" cy="210" rx="35" ry="25" class="park-fill" rx="3"/>`;
+  s += `<text x="245" y="213" text-anchor="middle" style="font-family:var(--mono);font-size:4.5px;fill:#5a7a4a;letter-spacing:1px" class="hood-label">VERDANT PARK</text>`;
+  s += `<rect x="480" cy="410" y="390" width="30" height="25" class="park-fill" rx="3"/>`;
+  s += `<rect x="345" y="540" width="25" height="20" class="park-fill" rx="3"/>`;
+
+  // Building blocks (decorative)
+  for(let i=0;i<40;i++){
+    const h = pick(NEIGHBORHOODS);
+    const bx = h.cx + (rand()-.5)*60;
+    const by = h.cy + (rand()-.5)*60;
+    const bw = 4+rand()*8, bh = 3+rand()*6;
+    if(pointInPoly(bx,by,h.path)){
+      s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" class="building-block" transform="rotate(${(rand()-.5)*15},${bx+bw/2},${by+bh/2})"/>`;
+    }
+  }
+
+  // Neighborhood labels
+  NEIGHBORHOODS.forEach(h => {
+    s += `<text x="${h.cx}" y="${h.cy-5}" text-anchor="middle" class="hood-label" style="font-size:6px">${h.name.toUpperCase()}</text>`;
+  });
+
+  // POI dots
+  POIS.forEach(p => {
+    const c = CATEGORIES[p.cat].color;
+    s += `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${c}" stroke="rgba(255,255,255,.8)" stroke-width="1" class="poi-dot" data-id="${p.id}" data-cat="${p.cat}"/>`;
+  });
+
+  // Compass rose
+  s += `<g transform="translate(35,660)">`;
+  s += `<circle cx="0" cy="0" r="16" fill="rgba(255,255,255,.7)" stroke="rgba(0,0,0,.15)" stroke-width=".5"/>`;
+  s += `<line x1="0" y1="-13" x2="0" y2="13" stroke="var(--ink)" stroke-width=".6"/>`;
+  s += `<line x1="-13" y1="0" x2="13" y2="0" stroke="var(--ink)" stroke-width=".6"/>`;
+  s += `<polygon points="0,-14 -3,-8 3,-8" fill="var(--accent)"/>`;
+  s += `<polygon points="0,14 -3,8 3,8" fill="var(--ink)" opacity=".3"/>`;
+  s += `<text x="0" y="-17" text-anchor="middle" style="font-family:var(--mono);font-size:5px;fill:var(--ink);font-weight:600">N</text>`;
+  s += `</g>`;
+
+  // Scale bar
+  s += `<g transform="translate(520,670)">`;
+  s += `<line x1="0" y1="0" x2="60" y2="0" stroke="var(--ink)" stroke-width=".8"/>`;
+  s += `<line x1="0" y1="-3" x2="0" y2="3" stroke="var(--ink)" stroke-width=".8"/>`;
+  s += `<line x1="30" y1="-2" x2="30" y2="2" stroke="var(--ink)" stroke-width=".5"/>`;
+  s += `<line x1="60" y1="-3" x2="60" y2="3" stroke="var(--ink)" stroke-width=".8"/>`;
+  s += `<text x="30" y="9" text-anchor="middle" style="font-family:var(--mono);font-size:4.5px;fill:var(--muted)">1 MILE</text>`;
+  s += `</g>`;
+
+  svg.innerHTML = s;
+
+  // Attach event listeners
+  svg.querySelectorAll('.hood-shape').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); selectHood(el.dataset.hood); });
+    el.addEventListener('mouseenter', e => showTooltip(e, NEIGHBORHOODS.find(h=>h.id===el.dataset.hood).name));
+    el.addEventListener('mouseleave', hideTooltip);
+  });
+  svg.querySelectorAll('.poi-dot').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); selectPoi(parseInt(el.dataset.id)); });
+    el.addEventListener('mouseenter', e => showTooltip(e, POIS[parseInt(el.dataset.id)].name));
+    el.addEventListener('mouseleave', hideTooltip);
+  });
+
+  renderMinimap();
+}
+
+function renderMinimap(){
+  const mm = document.getElementById('minimap-svg');
+  let s = `<rect x="0" y="0" width="600" height="900" fill="var(--water)"/>`;
+  NEIGHBORHOODS.forEach(h => {
+    s += `<path d="${h.path}" fill="${h.fill}" stroke="${h.stroke}" stroke-width=".5" opacity=".8"/>`;
+  });
+  POIS.forEach(p => {
+    s += `<circle cx="${p.x}" cy="${p.y}" r="1" fill="${CATEGORIES[p.cat].color}" opacity=".5"/>`;
+  });
+  s += `<rect id="minimap-viewport" x="0" y="0" width="${SVG_W}" height="${SVG_H}"/>`;
+  mm.innerHTML = s;
+}
+
+function updateMinimapViewport(){
+  const vp = document.getElementById('minimap-viewport');
+  if(!vp) return;
+  const c = document.getElementById('map-container');
+  const cw = c.clientWidth, ch = c.clientHeight;
+  const vx = -tx/scale, vy = -ty/scale;
+  const vw = cw/scale, vh = ch/scale;
+  vp.setAttribute('x', vx);
+  vp.setAttribute('y', vy);
+  vp.setAttribute('width', vw);
+  vp.setAttribute('height', vh);
+}
+
+function renderLegend(){
+  const el = document.getElementById('legend-items');
+  let h = '';
+  h += `<div class="legend-btn active" data-cat="all" onclick="toggleAll()"><span class="ldot" style="background:var(--ink)"></span>All (${POIS.length})</div>`;
+  for(const [k,v] of Object.entries(CATEGORIES)){
+    const count = POIS.filter(p=>p.cat===k).length;
+    const isActive = activeFilters.has(k);
+    h += `<div class="legend-btn ${isActive?'active':''}" data-cat="${k}" onclick="toggleCat('${k}')"><span class="ldot" style="background:${v.color}"></span>${v.label} (${count})</div>`;
+  }
+  el.innerHTML = h;
+}
+
+// ════════════════════════════════════════════════
+//  INTERACTIONS
+// ════════════════════════════════════════════════
+
+function selectPoi(id){
+  activePoi = id;
+  activeHood = null;
+  const p = POIS[id];
+  const cat = CATEGORIES[p.cat];
+  const hood = NEIGHBORHOODS.find(h=>h.id===p.hood);
+
+  // Update dots
+  document.querySelectorAll('.poi-dot').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.id)===id);
+  });
+  document.querySelectorAll('.hood-shape').forEach(el => el.classList.remove('active'));
+
+  // Detail panel
+  const detail = document.getElementById('detail');
+  detail.className = '';
+  detail.innerHTML = `
+    <div class="cat-label" style="color:${cat.color}">${cat.label}</div>
+    <div class="poi-name">${p.name}</div>
+    <div class="poi-hood">${p.hoodName}</div>
+    <div class="poi-desc">${p.desc}</div>
+    <div class="poi-meta">${p.meta.map(m=>`<span class="meta-tag">${m}</span>`).join('')}</div>
+    <div class="poi-section">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cat.color};margin-right:6px;vertical-align:middle"></span>
+      ${cat.label} &middot; ${p.hoodName}<br>
+      POI #${p.id+1} of ${POIS.length}
+    </div>
+  `;
+
+  document.getElementById('poi-list-section').innerHTML = '';
+  document.getElementById('sidebar').scrollTop = 0;
+}
+
+function selectHood(hoodId){
+  activeHood = hoodId;
+  activePoi = null;
+  const hood = NEIGHBORHOODS.find(h=>h.id===hoodId);
+  const hoodPois = POIS.filter(p=>p.hood===hoodId && activeFilters.has(p.cat));
+
+  // Highlight
+  document.querySelectorAll('.hood-shape').forEach(el => el.classList.toggle('active', el.dataset.hood===hoodId));
+  document.querySelectorAll('.poi-dot').forEach(el => el.classList.remove('active'));
+
+  // Detail
+  const detail = document.getElementById('detail');
+  detail.className = '';
+  detail.innerHTML = `
+    <div class="cat-label" style="color:var(--accent)">NEIGHBORHOOD</div>
+    <div class="hood-panel-title">${hood.name}</div>
+    <div class="hood-panel-sub">${hoodPois.length} points of interest</div>
+    <div class="hood-panel-desc">${hood.desc}</div>
+    <div class="hood-panel-list">
+      ${hoodPois.map(p => `
+        <div class="hood-poi-item" onclick="selectPoi(${p.id})">
+          <span class="hpi-dot" style="background:${CATEGORIES[p.cat].color}"></span>
+          <div>
+            <div class="hpi-name">${p.name}</div>
+            <div class="hpi-cat">${CATEGORIES[p.cat].label}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('poi-list-section').innerHTML = '';
+  document.getElementById('sidebar').scrollTop = 0;
+}
+
+function toggleCat(cat){
+  if(activeFilters.has(cat)){
+    activeFilters.delete(cat);
+  } else {
+    activeFilters.add(cat);
+  }
+  applyFilters();
+  renderLegend();
+}
+
+function toggleAll(){
+  const allKeys = Object.keys(CATEGORIES);
+  if(activeFilters.size === allKeys.length){
+    activeFilters.clear();
+  } else {
+    activeFilters = new Set(allKeys);
+  }
+  applyFilters();
+  renderLegend();
+}
+
+function applyFilters(){
+  let visible = 0;
+  document.querySelectorAll('.poi-dot').forEach(el => {
+    const show = activeFilters.has(el.dataset.cat);
+    el.classList.toggle('dimmed', !show);
+    el.classList.toggle('hidden', !show);
+    if(show) visible++;
+  });
+  document.getElementById('stat-visible').textContent = visible;
+
+  // If viewing a neighborhood, refresh
+  if(activeHood) selectHood(activeHood);
+}
+
+// ── Tooltip ──
+function showTooltip(e, text){
+  const tt = document.getElementById('tooltip');
+  tt.textContent = text;
+  tt.style.display = 'block';
+  tt.style.left = (e.clientX+12)+'px';
+  tt.style.top = (e.clientY-8)+'px';
+}
+function hideTooltip(){
+  document.getElementById('tooltip').style.display = 'none';
+}
+document.addEventListener('mousemove', e => {
+  const tt = document.getElementById('tooltip');
+  if(tt.style.display==='block'){
+    tt.style.left = (e.clientX+12)+'px';
+    tt.style.top = (e.clientY-8)+'px';
+  }
+});
+
+// ── Search ──
+const searchInput = document.getElementById('search-input');
+const searchResults = document.getElementById('search-results');
+
+searchInput.addEventListener('input', function(){
+  const q = this.value.toLowerCase().trim();
+  if(q.length < 2){ searchResults.classList.remove('open'); return; }
+
+  const matches = [];
+  // Search neighborhoods
+  NEIGHBORHOODS.forEach(h => {
+    if(h.name.toLowerCase().includes(q)) matches.push({ type:'hood', id:h.id, name:h.name, sub:'Neighborhood', color:'var(--accent)' });
+  });
+  // Search POIs
+  POIS.forEach(p => {
+    if(p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q)){
+      matches.push({ type:'poi', id:p.id, name:p.name, sub:p.hoodName, color:CATEGORIES[p.cat].color });
+    }
+  });
+
+  if(matches.length === 0){
+    searchResults.innerHTML = '<div style="padding:.75rem;font-size:.8rem;color:var(--muted);font-style:italic">No results found</div>';
+  } else {
+    searchResults.innerHTML = matches.slice(0,15).map(m => `
+      <div class="search-item" onclick="${m.type==='hood'?`selectHood('${m.id}')`:`selectPoi(${m.id})`};clearSearch()">
+        <span class="sdot" style="background:${m.color}"></span>
+        <div><div class="sname">${m.name}</div><div class="shood">${m.sub}</div></div>
+      </div>
+    `).join('');
+  }
+  searchResults.classList.add('open');
+});
+
+searchInput.addEventListener('focus', function(){ if(this.value.length>=2) searchResults.classList.add('open'); });
+document.addEventListener('click', function(e){ if(!e.target.closest('#search-wrap')) searchResults.classList.remove('open'); });
+
+function clearSearch(){
+  searchInput.value = '';
+  searchResults.classList.remove('open');
+  searchResults.innerHTML = '';
+}
+
+// ════════════════════════════════════════════════
+//  PAN / ZOOM
+// ════════════════════════════════════════════════
+
+function applyTransform(){
+  const svg = document.getElementById('map-svg');
+  svg.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+  svg.style.transformOrigin = '0 0';
+  document.getElementById('stat-zoom').textContent = scale.toFixed(1);
+  updateMinimapViewport();
+}
+
+function zoomBy(factor, cx, cy){
+  const c = document.getElementById('map-container');
+  if(cx===undefined) cx = c.clientWidth/2;
+  if(cy===undefined) cy = c.clientHeight/2;
+  const ns = Math.max(0.4, Math.min(6, scale*factor));
+  tx = cx - (cx-tx)*(ns/scale);
+  ty = cy - (cy-ty)*(ns/scale);
+  scale = ns;
+  applyTransform();
+}
+
+function resetView(){
+  const c = document.getElementById('map-container');
+  const cw = c.clientWidth, ch = c.clientHeight;
+  scale = Math.min(cw/SVG_W, ch/SVG_H)*0.88;
+  tx = (cw - SVG_W*scale)/2;
+  ty = (ch - SVG_H*scale)/2 + 20;
+  applyTransform();
+}
+
+// Mouse pan
+const mc = document.getElementById('map-container');
+mc.addEventListener('mousedown', e => {
+  if(e.target.closest('button')||e.target.closest('input')||e.target.closest('a')) return;
+  dragging=true; dragStartX=e.clientX; dragStartY=e.clientY; lastTx=tx; lastTy=ty;
+  mc.classList.add('dragging');
+});
+window.addEventListener('mousemove', e => {
+  if(!dragging) return;
+  tx = lastTx + (e.clientX-dragStartX);
+  ty = lastTy + (e.clientY-dragStartY);
+  applyTransform();
+});
+window.addEventListener('mouseup', () => { dragging=false; mc.classList.remove('dragging'); });
+
+// Mouse wheel zoom
+mc.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY>0 ? 0.9 : 1.1;
+  const rect = mc.getBoundingClientRect();
+  zoomBy(factor, e.clientX-rect.left, e.clientY-rect.top);
+}, {passive:false});
+
+// Touch pan/zoom
+let lastTouchDist=0, lastTouchMid=null;
+mc.addEventListener('touchstart', e => {
+  if(e.touches.length===1){
+    dragging=true; dragStartX=e.touches[0].clientX; dragStartY=e.touches[0].clientY; lastTx=tx; lastTy=ty;
+  }
+  if(e.touches.length===2){
+    dragging=false;
+    lastTouchDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    lastTouchMid = {x:(e.touches[0].clientX+e.touches[1].clientX)/2, y:(e.touches[0].clientY+e.touches[1].clientY)/2};
+  }
+}, {passive:true});
+mc.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if(e.touches.length===1 && dragging){
+    tx = lastTx + (e.touches[0].clientX-dragStartX);
+    ty = lastTy + (e.touches[0].clientY-dragStartY);
+    applyTransform();
+  }
+  if(e.touches.length===2 && lastTouchDist){
+    const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    const mid = {x:(e.touches[0].clientX+e.touches[1].clientX)/2, y:(e.touches[0].clientY+e.touches[1].clientY)/2};
+    const rect = mc.getBoundingClientRect();
+    zoomBy(d/lastTouchDist, mid.x-rect.left, mid.y-rect.top);
+    // Pan
+    tx += mid.x-lastTouchMid.x;
+    ty += mid.y-lastTouchMid.y;
+    applyTransform();
+    lastTouchDist=d;
+    lastTouchMid=mid;
+  }
+}, {passive:false});
+mc.addEventListener('touchend', () => { dragging=false; lastTouchDist=0; lastTouchMid=null; });
+
+// Minimap click to navigate
+document.getElementById('minimap').addEventListener('click', function(e){
+  const rect = this.getBoundingClientRect();
+  const mx = (e.clientX-rect.left)/rect.width * SVG_W;
+  const my = (e.clientY-rect.top)/rect.height * SVG_H;
+  const c = document.getElementById('map-container');
+  tx = c.clientWidth/2 - mx*scale;
+  ty = c.clientHeight/2 - my*scale;
+  applyTransform();
+});
+
+// ════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════
+
+function init(){
+  renderMap();
+  renderLegend();
+  resetView();
+  window.addEventListener('resize', resetView);
+
+  // Click on empty space deselects
+  document.getElementById('map-svg').addEventListener('click', function(e){
+    if(!e.target.closest('.poi-dot') && !e.target.closest('.hood-shape')){
+      activePoi=null; activeHood=null;
+      document.querySelectorAll('.poi-dot').forEach(el=>el.classList.remove('active'));
+      document.querySelectorAll('.hood-shape').forEach(el=>el.classList.remove('active'));
+      const detail = document.getElementById('detail');
+      detail.className = 'empty';
+      detail.innerHTML = '<div class="prompt">"Every block has a frequency.<br>Every NPC has a story.<br>This map tunes you in."</div><div class="prompt-sub">300 POIs across 12 neighborhoods</div>';
+      document.getElementById('poi-list-section').innerHTML = '';
+    }
+  });
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>

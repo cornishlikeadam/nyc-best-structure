@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NYC Best Structure — Map</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--ink:#1a1a1a;--paper:#f5f0e8;--paper-dark:#e8e0d0;--accent:#c4362c;--muted:#6b6359;--serif:'Playfair Display',Georgia,serif;--sans:'Inter',sans-serif;--mono:'JetBrains Mono',monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);overflow:hidden;height:100vh;width:100vw}
+::selection{background:var(--accent);color:#fff}
+#app{display:flex;height:100vh;width:100vw}
+#map-container{flex:1;position:relative;overflow:hidden;cursor:grab}
+#map-container.dragging{cursor:grabbing}
+#map-svg{position:absolute;top:0;left:0;transition:transform .1s ease-out}
+#sidebar{width:340px;background:#fff;border-left:2px solid var(--ink);overflow-y:auto;display:flex;flex-direction:column}
+#sidebar-header{padding:1.25rem 1.5rem;border-bottom:2px solid var(--ink);text-align:center}
+#sidebar-header h1{font-family:var(--serif);font-size:1.1rem;font-weight:900;letter-spacing:-.01em}
+#sidebar-header p{font-family:var(--mono);font-size:.6rem;letter-spacing:.15em;color:var(--muted);margin-top:.25rem}
+#detail{padding:1.5rem;flex:1;display:flex;flex-direction:column}
+#detail.empty{justify-content:center;align-items:center;text-align:center}
+#detail.empty .prompt{font-family:var(--serif);font-style:italic;font-size:1rem;color:var(--muted);line-height:1.6}
+#detail .cat{font-family:var(--mono);font-size:.6rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;margin-bottom:.5rem}
+#detail .name{font-family:var(--serif);font-size:1.4rem;font-weight:900;line-height:1.2;margin-bottom:.5rem}
+#detail .hood{font-family:var(--mono);font-size:.7rem;color:var(--muted);letter-spacing:.05em;margin-bottom:1rem}
+#detail .desc{font-family:var(--serif);font-size:.95rem;line-height:1.75;margin-bottom:1.25rem}
+#detail .meta{font-family:var(--mono);font-size:.7rem;color:var(--muted);line-height:1.8;border-top:1px solid var(--paper-dark);padding-top:1rem}
+#detail .meta span{display:block}
+#legend{padding:1rem 1.5rem;border-top:1px solid var(--paper-dark)}
+#legend h4{font-family:var(--mono);font-size:.6rem;letter-spacing:.2em;color:var(--muted);margin-bottom:.75rem}
+.legend-item{display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;font-size:.75rem;color:var(--muted);cursor:pointer;padding:.2rem 0}
+.legend-item:hover{color:var(--ink)}
+.legend-item .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.legend-item.active{color:var(--ink);font-weight:500}
+#zoom-controls{position:absolute;bottom:1.5rem;left:1.5rem;display:flex;flex-direction:column;gap:.25rem}
+#zoom-controls button{width:36px;height:36px;background:#fff;border:1px solid rgba(0,0,0,.15);font-family:var(--mono);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#zoom-controls button:hover{background:var(--ink);color:var(--paper)}
+.poi-marker{cursor:pointer;transition:transform .15s ease}
+.poi-marker:hover{transform:scale(1.3)}
+.poi-marker.active{transform:scale(1.4)}
+.hood-label{font-family:var(--mono);font-size:7px;letter-spacing:1.5px;fill:var(--muted);text-transform:uppercase;pointer-events:none;opacity:.7}
+.hood-shape{fill:transparent;stroke:rgba(0,0,0,.06);stroke-width:.5;cursor:pointer;transition:fill .2s}
+.hood-shape:hover{fill:rgba(196,54,44,.04)}
+.hood-shape.active{fill:rgba(196,54,44,.07)}
+#coords{position:absolute;bottom:1.5rem;right:360px;font-family:var(--mono);font-size:.6rem;color:var(--muted);background:rgba(255,255,255,.8);padding:.25rem .5rem}
+@media(max-width:768px){
+#app{flex-direction:column-reverse}
+#sidebar{width:100%;height:45vh;border-left:none;border-top:2px solid var(--ink)}
+#map-container{height:55vh}
+#coords{right:1rem}
+}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="map-container">
+<svg id="map-svg" viewBox="0 0 600 800" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="zoom-controls">
+<button onclick="zoomIn()">+</button>
+<button onclick="zoomOut()">&minus;</button>
+<button onclick="resetView()" style="font-size:.65rem">FIT</button>
+</div>
+<div id="coords"></div>
+</div>
+<div id="sidebar">
+<div id="sidebar-header">
+<h1>NYC BEST STRUCTURE</h1>
+<p>INTERACTIVE MAP — VOL. 1</p>
+</div>
+<div id="detail" class="empty">
+<div class="prompt">Click any point on the map<br>to explore the guide.</div>
+</div>
+<div id="legend">
+<h4>CATEGORIES</h4>
+</div>
+</div>
+</div>
+
+<script>
+const CATS = {
+  eat:  { color:'#c4362c', label:'Eat' },
+  see:  { color:'#2a6b4f', label:'See' },
+  buy:  { color:'#8b6914', label:'Buy' },
+  move: { color:'#3a5fa0', label:'Move' },
+  stay: { color:'#7a5195', label:'Stay' }
+};
+
+const HOODS = [
+  { id:'harlem', name:'Harlem', path:'M185,95 L310,95 L315,140 L180,140 Z', lx:220, ly:122 },
+  { id:'uws', name:'Upper West Side', path:'M175,140 L245,140 L240,210 L170,210 Z', lx:185, ly:180 },
+  { id:'ues', name:'Upper East Side', path:'M260,140 L320,140 L315,210 L255,210 Z', lx:268, ly:180 },
+  { id:'midtown', name:'Midtown', path:'M168,210 L318,210 L310,290 L165,290 Z', lx:210, ly:255 },
+  { id:'chelsea', name:'Chelsea', path:'M160,290 L270,290 L265,340 L158,340 Z', lx:185, ly:318 },
+  { id:'gramercy', name:'Gramercy', path:'M270,290 L312,290 L308,340 L265,340 Z', lx:272, ly:318 },
+  { id:'west-village', name:'West Village', path:'M155,340 L230,340 L225,385 L152,385 Z', lx:162, ly:365 },
+  { id:'east-village', name:'East Village', path:'M230,340 L310,340 L305,385 L225,385 Z', lx:242, ly:365 },
+  { id:'soho', name:'SoHo', path:'M158,385 L250,385 L248,410 L160,415 Z', lx:185, ly:400 },
+  { id:'les', name:'Lower East Side', path:'M250,385 L308,385 L315,430 L248,425 Z', lx:260, ly:410 },
+  { id:'chinatown', name:'Chinatown', path:'M175,415 L260,415 L265,445 L180,445 Z', lx:195, ly:433 },
+  { id:'tribeca', name:'Tribeca', path:'M150,415 L175,415 L180,455 L148,460 Z', lx:148, ly:440 },
+  { id:'fidi', name:'Financial District', path:'M155,460 L260,450 L265,510 L170,520 L155,490 Z', lx:190, ly:485 },
+  { id:'williamsburg', name:'Williamsburg', path:'M350,310 L440,290 L450,370 L360,380 Z', lx:370, ly:340 },
+  { id:'bushwick', name:'Bushwick', path:'M440,290 L530,280 L535,370 L450,370 Z', lx:465, ly:335 },
+  { id:'dumbo', name:'DUMBO', path:'M330,410 L380,400 L385,430 L335,435 Z', lx:340, ly:420 },
+  { id:'carroll-gardens', name:'Carroll Gardens', path:'M320,450 L400,440 L405,490 L325,500 Z', lx:335, ly:472 },
+  { id:'red-hook', name:'Red Hook', path:'M280,500 L340,495 L345,560 L285,565 Z', lx:290, ly:535 },
+  { id:'park-slope', name:'Park Slope', path:'M370,470 L440,460 L445,530 L375,540 Z', lx:385, ly:500 },
+  { id:'greenwood', name:'Green-Wood', path:'M360,550 L450,540 L455,620 L365,630 Z', lx:380, ly:585 },
+  { id:'astoria', name:'Astoria', path:'M360,150 L470,130 L480,210 L370,220 Z', lx:395, ly:175 },
+  { id:'hudson-yards', name:'Hudson Yards', path:'M148,270 L168,270 L165,300 L150,300 Z', lx:135, ly:288 },
+];
+
+const POIS = [
+  // EAT
+  { id:'joes', cat:'eat', name:"Joe's Pizza", hood:'West Village', x:190, y:360, desc:"No explanation needed. If you ask for a fork they will remember your face.", section:"Carmine St — since 1975" },
+  { id:'russ', cat:'eat', name:"Russ & Daughters", hood:'Lower East Side', x:270, y:395, desc:"Lox, cream cheese, everything bagel. Operating since 1914. Your favorite brunch spot could never.", section:"Houston St — appetizing since 1914" },
+  { id:'lostacos', cat:'eat', name:"Los Tacos No. 1", hood:'Chelsea', x:175, y:308, desc:"The adobada taco is a spiritual experience. Cash speeds things up.", section:"Chelsea Market" },
+  { id:'lucali', cat:'eat', name:"Lucali", hood:'Carroll Gardens', x:355, y:470, desc:"BYOB pizza in Brooklyn. The wait is long. The pizza is why you waited.", section:"Henry St, Carroll Gardens" },
+  { id:'halal', cat:'eat', name:"Halal Guys", hood:'Midtown', x:240, y:242, desc:"The white sauce is the real currency of Midtown.", section:"53rd & 6th Ave" },
+  { id:'xian', cat:'eat', name:"Xi'an Famous Foods", hood:'Chinatown', x:220, y:430, desc:"Hand-pulled noodles. The spicy cumin lamb. Multiple locations, all correct.", section:"Multiple locations" },
+  { id:'luger', cat:'eat', name:"Peter Luger", hood:'Williamsburg', x:380, y:345, desc:"Cash only. Porterhouse for two. Been here since 1887. Don't order the menu — order the steak.", section:"Driggs Ave, Williamsburg — since 1887" },
+  { id:'dimes', cat:'eat', name:"Dimes", hood:'Chinatown / LES', x:255, y:420, desc:"Healthy-adjacent. The crowd is beautiful. The grain bowl is too.", section:"Canal St" },
+
+  // SEE
+  { id:'woolworth', cat:'see', name:"Woolworth Building", hood:'Financial District', x:200, y:470, desc:"Neo-Gothic. 1913. They called it the Cathedral of Commerce and they were right.", section:"233 Broadway — tallest building in the world until 1930" },
+  { id:'vessel', cat:'see', name:"Vessel", hood:'Hudson Yards', x:155, y:285, desc:"Love it or hate it, walk the stairs. 154 flights. The structure is the point.", section:"Hudson Yards — 2,500 steps, 80 landings" },
+  { id:'bkbridge', cat:'see', name:"Brooklyn Bridge", hood:'DUMBO / FiDi', x:280, y:460, desc:"Tourist trap by noon. Sacred ground at 6 AM. Walk from Brooklyn to Manhattan, not the other way.", section:"Built 1869–1883 — 1,595 ft span" },
+  { id:'highline', cat:'see', name:"The High Line", hood:'Chelsea / Meatpacking', x:155, y:330, desc:"An elevated rail turned park. Walk it from Gansevoort to 34th St. The Whitney Museum is at the south entrance.", section:"1.45 miles — Gansevoort to 34th St" },
+  { id:'totr', cat:'see', name:"Top of the Rock", hood:'Midtown', x:258, y:240, desc:"Top of the Rock: you see the Empire State in your photo. Empire State: you're inside it and can't see it. Choose accordingly.", section:"30 Rock — 70 floors, 360° views" },
+  { id:'greenwood', cat:'see', name:"Green-Wood Cemetery", hood:'Brooklyn', x:400, y:580, desc:"478 acres. Basquiat is buried here. So is Boss Tweed. The views of the harbor rival any observation deck.", section:"Est. 1838 — National Historic Landmark" },
+
+  // BUY
+  { id:'strand', cat:'buy', name:"Strand Bookstore", hood:'Union Square', x:230, y:350, desc:"18 miles of books. The rare book room upstairs is where the real ones shop.", section:"828 Broadway — since 1927" },
+  { id:'canalmarket', cat:'buy', name:"Canal Street Market", hood:'Chinatown', x:205, y:425, desc:"Curated vendors. Good for gifts that don't look like gifts from New York.", section:"265 Canal St" },
+  { id:'bkflea', cat:'buy', name:"Brooklyn Flea", hood:'DUMBO', x:350, y:415, desc:"Vintage, design objects, random excellence. Weekends only.", section:"DUMBO + Williamsburg — weekends" },
+  { id:'kith', cat:'buy', name:"Kith", hood:'SoHo', x:195, y:393, desc:"Streetwear temple. The cereal bar inside is not ironic — it's good.", section:"337 Lafayette St" },
+  { id:'mcnally', cat:'buy', name:"McNally Jackson", hood:'SoHo', x:210, y:398, desc:"Independent. The risograph printing station in the back is usable by anyone.", section:"52 Prince St — risograph studio in-house" },
+
+  // MOVE
+  { id:'ferry', cat:'move', name:"NYC Ferry — DUMBO", hood:'Brooklyn', x:330, y:430, desc:"$4 and better views than any rooftop bar. Rockaway Beach run in summer is mandatory.", section:"East River routes — $4 flat fare" },
+  { id:'citibike', cat:'move', name:"Citi Bike Hub", hood:'Midtown', x:230, y:260, desc:"Docks are everywhere below 96th. The electric ones are worth the upcharge. Return it before the 45-minute mark.", section:"Docks every few blocks — 14,500+ bikes" },
+
+  // STAY (neighborhoods as points of interest)
+  { id:'les-stay', cat:'stay', name:"Lower East Side", hood:'Manhattan', x:290, y:400, desc:"Gritty-chic, late nights. The bars, the live music, the vintage shops. This is where the energy concentrates after midnight.", section:"Best for: bars, live music, vintage" },
+  { id:'wv-stay', cat:'stay', name:"West Village", hood:'Manhattan', x:175, y:370, desc:"Brownstone beautiful. The most walkable, most cinematic neighborhood in the city. Every corner looks like a movie set.", section:"Best for: walking, eating, people-watching" },
+  { id:'wburg-stay', cat:'stay', name:"Williamsburg", hood:'Brooklyn', x:410, y:330, desc:"Brooklyn's main character. The coffee is better here, the record stores are real, and the rooftops face Manhattan.", section:"Best for: coffee, records, rooftops" },
+  { id:'harlem-stay', cat:'stay', name:"Harlem", hood:'Manhattan', x:240, y:115, desc:"Soul and history. Gospel brunch at Sylvia's, jazz at the Red Rooster, and food that doesn't need your Instagram.", section:"Best for: gospel brunch, jazz, real food" },
+  { id:'astoria-stay', cat:'stay', name:"Astoria", hood:'Queens', x:420, y:175, desc:"Queens' quiet flex. Greek food on 30th Ave, beer gardens on the waterfront, and more languages per block than anywhere.", section:"Best for: Greek food, beer gardens, diversity" },
+  { id:'redhook-stay', cat:'stay', name:"Red Hook", hood:'Brooklyn', x:305, y:535, desc:"Industrial waterfront. Key Lime Pie at Steve's, views of the Statue of Liberty, and an IKEA ferry that doubles as a scenic cruise.", section:"Best for: Steve's Key Lime Pie, waterfront walks" },
+];
+
+// Water & park shapes
+const WATER = 'M140,80 L140,530 Q150,545 170,550 L280,570 Q290,560 285,540 L270,460 Q268,440 275,430 L320,395 Q335,388 345,395 L360,410 Q365,420 355,435 L340,500 L345,570 L365,640 L460,630 L470,620 L540,280 L485,120 L370,130 L320,85 Z';
+const CENTRAL_PARK = 'M200,148 L290,148 L290,210 L200,210 Z';
+const PROSPECT_PARK = 'M390,470 L440,465 L445,530 L395,535 Z';
+const EAST_RIVER = 'M310,85 L325,140 L320,210 L315,290 L310,385 L320,395 Q335,388 345,395 L360,310 L350,290 L370,220 L370,130 Z';
+
+let svg, scale=1, tx=0, ty=0, dragging=false, lx=0, ly=0, activeFilter=null, activePoi=null;
+
+function init(){
+  svg = document.getElementById('map-svg');
+  buildMap();
+  buildLegend();
+  setupPanZoom();
+  resetView();
+}
+
+function buildMap(){
+  let s = '';
+
+  // Water background
+  s += `<rect x="0" y="0" width="600" height="800" fill="#dce8f0" rx="0"/>`;
+
+  // Land mass
+  s += `<path d="${WATER}" fill="var(--paper)" stroke="none"/>`;
+
+  // East river
+  s += `<path d="${EAST_RIVER}" fill="#dce8f0" stroke="none" opacity=".6"/>`;
+
+  // Neighborhood shapes
+  HOODS.forEach(h => {
+    s += `<path d="${h.path}" class="hood-shape" data-hood="${h.id}" onclick="clickHood('${h.id}')"/>`;
+    s += `<text x="${h.lx}" y="${h.ly}" class="hood-label">${h.name}</text>`;
+  });
+
+  // Parks
+  s += `<rect x="200" y="148" width="90" height="62" fill="#c8ddb8" stroke="#a3c48e" stroke-width=".5" rx="2"/>`;
+  s += `<text x="218" y="183" class="hood-label" style="fill:#5a7a4a;font-size:6px">CENTRAL PARK</text>`;
+  s += `<rect x="390" y="470" width="50" height="60" fill="#c8ddb8" stroke="#a3c48e" stroke-width=".5" rx="2"/>`;
+  s += `<text x="393" y="504" class="hood-label" style="fill:#5a7a4a;font-size:5px">PROSPECT PK</text>`;
+
+  // Street grid hints (Manhattan)
+  for(let y=160; y<500; y+=15){
+    s += `<line x1="150" y1="${y}" x2="310" y2="${y}" stroke="rgba(0,0,0,.03)" stroke-width=".3"/>`;
+  }
+  for(let x=160; x<310; x+=12){
+    s += `<line x1="${x}" y1="140" x2="${x}" y2="520" stroke="rgba(0,0,0,.03)" stroke-width=".3"/>`;
+  }
+
+  // Broadway diagonal
+  s += `<line x1="195" y1="148" x2="210" y2="510" stroke="rgba(0,0,0,.07)" stroke-width=".8" stroke-dasharray="3,2"/>`;
+
+  // POI markers
+  POIS.forEach(p => {
+    const c = CATS[p.cat].color;
+    s += `<g class="poi-marker" data-id="${p.id}" data-cat="${p.cat}" onclick="clickPoi('${p.id}')">`;
+    s += `<circle cx="${p.x}" cy="${p.y}" r="5" fill="${c}" stroke="#fff" stroke-width="1.5" opacity=".9"/>`;
+    s += `<circle cx="${p.x}" cy="${p.y}" r="8" fill="transparent"/>`;
+    s += `</g>`;
+  });
+
+  // Compass
+  s += `<g transform="translate(50,720)">`;
+  s += `<line x1="0" y1="-20" x2="0" y2="20" stroke="var(--ink)" stroke-width="1"/>`;
+  s += `<line x1="-15" y1="0" x2="15" y2="0" stroke="var(--ink)" stroke-width="1"/>`;
+  s += `<polygon points="0,-22 -4,-14 4,-14" fill="var(--ink)"/>`;
+  s += `<text x="0" y="-27" text-anchor="middle" style="font-family:var(--mono);font-size:7px;fill:var(--ink)">N</text>`;
+  s += `</g>`;
+
+  // Scale bar
+  s += `<g transform="translate(30,760)">`;
+  s += `<line x1="0" y1="0" x2="60" y2="0" stroke="var(--ink)" stroke-width="1"/>`;
+  s += `<line x1="0" y1="-3" x2="0" y2="3" stroke="var(--ink)" stroke-width="1"/>`;
+  s += `<line x1="60" y1="-3" x2="60" y2="3" stroke="var(--ink)" stroke-width="1"/>`;
+  s += `<text x="30" y="10" text-anchor="middle" style="font-family:var(--mono);font-size:5px;fill:var(--muted)">~1 MILE</text>`;
+  s += `</g>`;
+
+  svg.innerHTML = s;
+}
+
+function buildLegend(){
+  const legend = document.getElementById('legend');
+  let h = '<h4>CATEGORIES</h4>';
+  h += `<div class="legend-item active" data-cat="all" onclick="filterCat(null)"><span class="dot" style="background:var(--ink)"></span>All (${POIS.length})</div>`;
+  for(const [k,v] of Object.entries(CATS)){
+    const count = POIS.filter(p=>p.cat===k).length;
+    h += `<div class="legend-item" data-cat="${k}" onclick="filterCat('${k}')"><span class="dot" style="background:${v.color}"></span>${v.label} (${count})</div>`;
+  }
+  legend.innerHTML = h;
+}
+
+function clickPoi(id){
+  const p = POIS.find(x=>x.id===id);
+  if(!p) return;
+  activePoi = id;
+
+  // Update markers
+  document.querySelectorAll('.poi-marker').forEach(m=>{
+    m.classList.toggle('active', m.dataset.id===id);
+  });
+
+  // Update detail
+  const cat = CATS[p.cat];
+  const detail = document.getElementById('detail');
+  detail.className = '';
+  detail.innerHTML = `
+    <div class="cat">${cat.label}</div>
+    <div class="name">${p.name}</div>
+    <div class="hood">${p.hood}</div>
+    <div class="desc">${p.desc}</div>
+    <div class="meta">
+      <span>${p.section}</span>
+    </div>
+  `;
+}
+
+function clickHood(id){
+  const h = HOODS.find(x=>x.id===id);
+  if(!h) return;
+  document.querySelectorAll('.hood-shape').forEach(s=>{
+    s.classList.toggle('active', s.dataset.hood===id);
+  });
+  // Show POIs in this hood
+  const inHood = POIS.filter(p => p.hood.toLowerCase().includes(h.name.toLowerCase()));
+  if(inHood.length === 1){
+    clickPoi(inHood[0].id);
+  } else if(inHood.length > 1){
+    const detail = document.getElementById('detail');
+    detail.className = '';
+    let html = `<div class="cat">NEIGHBORHOOD</div><div class="name">${h.name}</div><div class="desc" style="margin-bottom:.75rem">${inHood.length} spots in this area:</div>`;
+    inHood.forEach(p=>{
+      html += `<div style="padding:.5rem 0;border-bottom:1px solid var(--paper-dark);cursor:pointer;font-family:var(--serif);font-size:.9rem" onclick="clickPoi('${p.id}')"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CATS[p.cat].color};margin-right:.5rem"></span>${p.name}</div>`;
+    });
+    detail.innerHTML = html;
+  }
+}
+
+function filterCat(cat){
+  activeFilter = cat;
+  document.querySelectorAll('.poi-marker').forEach(m=>{
+    if(!cat || m.dataset.cat === cat){
+      m.style.opacity = '1';
+      m.style.pointerEvents = 'auto';
+    } else {
+      m.style.opacity = '.12';
+      m.style.pointerEvents = 'none';
+    }
+  });
+  document.querySelectorAll('.legend-item').forEach(el=>{
+    const isCurrent = (!cat && el.dataset.cat==='all') || el.dataset.cat===cat;
+    el.classList.toggle('active', isCurrent);
+  });
+}
+
+function setupPanZoom(){
+  const c = document.getElementById('map-container');
+  c.addEventListener('mousedown', e=>{ dragging=true; lx=e.clientX; ly=e.clientY; c.classList.add('dragging'); });
+  window.addEventListener('mousemove', e=>{
+    if(!dragging) return;
+    tx += e.clientX - lx;
+    ty += e.clientY - ly;
+    lx = e.clientX;
+    ly = e.clientY;
+    applyTransform();
+  });
+  window.addEventListener('mouseup', ()=>{ dragging=false; document.getElementById('map-container').classList.remove('dragging'); });
+  c.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const d = e.deltaY > 0 ? -0.1 : 0.1;
+    const ns = Math.max(0.5, Math.min(4, scale + d));
+    // Zoom toward cursor
+    const rect = c.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    tx = cx - (cx - tx) * (ns / scale);
+    ty = cy - (cy - ty) * (ns / scale);
+    scale = ns;
+    applyTransform();
+  }, {passive:false});
+  // Touch
+  let lastDist = 0;
+  c.addEventListener('touchstart', e=>{
+    if(e.touches.length===1){ dragging=true; lx=e.touches[0].clientX; ly=e.touches[0].clientY; }
+    if(e.touches.length===2){ lastDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); }
+  });
+  c.addEventListener('touchmove', e=>{
+    e.preventDefault();
+    if(e.touches.length===1 && dragging){
+      tx += e.touches[0].clientX - lx;
+      ty += e.touches[0].clientY - ly;
+      lx = e.touches[0].clientX;
+      ly = e.touches[0].clientY;
+      applyTransform();
+    }
+    if(e.touches.length===2){
+      const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      if(lastDist){
+        scale = Math.max(0.5, Math.min(4, scale * (d/lastDist)));
+        applyTransform();
+      }
+      lastDist = d;
+    }
+  }, {passive:false});
+  c.addEventListener('touchend', ()=>{ dragging=false; lastDist=0; });
+}
+
+function applyTransform(){
+  svg.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+  svg.style.transformOrigin = '0 0';
+}
+
+function zoomIn(){ scale = Math.min(4, scale + .25); applyTransform(); }
+function zoomOut(){ scale = Math.max(.5, scale - .25); applyTransform(); }
+function resetView(){
+  const c = document.getElementById('map-container');
+  const w = c.clientWidth, h = c.clientHeight;
+  scale = Math.min(w/600, h/800) * .9;
+  tx = (w - 600*scale)/2;
+  ty = (h - 800*scale)/2;
+  applyTransform();
+}
+
+window.addEventListener('resize', resetView);
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
