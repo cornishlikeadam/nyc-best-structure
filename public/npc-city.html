@@ -71,8 +71,9 @@ body{background:var(--paper);color:#dde;font-family:var(--sans);overflow:hidden;
 #time-play:hover{color:var(--cyan);border-color:var(--cyan-dim)}
 
 /* ── MINIMAP ── */
-#minimap{position:absolute;bottom:1rem;right:calc(var(--sidebar-w) + 1rem);z-index:15;width:130px;height:150px;background:rgba(0,0,0,.6);border:1px solid var(--border);overflow:hidden;cursor:pointer}
+#minimap{position:absolute;top:5.5rem;right:calc(var(--sidebar-w) + 1rem);z-index:15;width:110px;height:125px;background:rgba(0,0,0,.7);border:1px solid var(--border);overflow:hidden;cursor:pointer;transition:opacity .2s}
 #minimap svg{width:100%;height:100%}
+#minimap.collapsed{height:0;opacity:0;pointer-events:none;border:none}
 .mm-vp{fill:none;stroke:var(--cyan);stroke-width:2;opacity:.6}
 
 /* ── SIDEBAR ── */
@@ -222,11 +223,43 @@ body.surveillance #map-area::after{content:'';position:absolute;top:0;left:0;rig
 @keyframes scanline{0%{background-position:0 0}100%{background-position:0 100vh}}
 body.surveillance .poi{transition:opacity .4s}
 body.surveillance .poi.inactive{opacity:.06}
+body.surveillance .poi.anomaly{animation:anomaly-pulse 1s ease-in-out infinite;filter:drop-shadow(0 0 4px var(--accent))}
 body.surveillance .event-marker{animation:pulse 1.2s ease-in-out infinite}
 body.surveillance #hud-title .sub{color:var(--accent)}
 body.surveillance .surv-status{display:block}
+body.surveillance .borough{fill-opacity:.04}
+body.surveillance .borough.hot-zone{fill:rgba(255,50,30,.12)!important;stroke:rgba(255,50,30,.4)!important}
+@keyframes anomaly-pulse{0%,100%{opacity:.6}50%{opacity:1}}
 .surv-status{display:none;font-family:var(--mono);font-size:.5rem;color:var(--accent);letter-spacing:.15em;padding:.3rem .75rem;border-bottom:1px solid var(--border);background:rgba(196,54,44,.05);text-align:center;animation:blink 2s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* ── SURV SIDEBAR CONTROLS ── */
+.surv-controls{display:none;padding:.5rem .75rem;border-bottom:1px solid var(--border);background:rgba(196,54,44,.03)}
+body.surveillance .surv-controls{display:block}
+.surv-row{display:flex;align-items:center;justify-content:space-between;padding:.2rem 0}
+.surv-row label{font-family:var(--mono);font-size:.5rem;color:var(--muted-light);letter-spacing:.08em;text-transform:uppercase}
+.surv-row .sr-val{font-family:var(--mono);font-size:.55rem;color:var(--accent);font-weight:500}
+.surv-toggle-sm{width:28px;height:14px;border-radius:7px;background:var(--border);position:relative;cursor:pointer;transition:background .15s}
+.surv-toggle-sm.on{background:var(--accent)}
+.surv-toggle-sm::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:#ddd;transition:left .15s}
+.surv-toggle-sm.on::after{left:16px}
+.threat-bar{display:flex;gap:1px;height:8px;flex:1;margin-left:.5rem}
+.threat-seg{flex:1;background:var(--border);border-radius:1px;transition:background .3s}
+.threat-seg.low{background:#00dd88}
+.threat-seg.med{background:#ffaa00}
+.threat-seg.high{background:#ff4444}
+.threat-seg.crit{background:#ff0044;animation:blink 1s ease-in-out infinite}
+
+/* ── BEHAVIOR PANEL ── */
+.behavior-panel{display:none;padding:.5rem .75rem;border-bottom:1px solid var(--border)}
+body.surveillance .behavior-panel{display:block}
+.bh-cluster{padding:.3rem .2rem;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.bh-cluster:hover{background:rgba(255,255,255,.02)}
+.bh-cluster-head{display:flex;align-items:center;justify-content:space-between}
+.bh-cluster-name{font-family:var(--mono);font-size:.55rem;color:var(--cyan);letter-spacing:.08em}
+.bh-cluster-count{font-family:var(--mono);font-size:.5rem;color:var(--muted)}
+.bh-cluster-bar{height:3px;background:var(--border);margin-top:.2rem;border-radius:1px;overflow:hidden}
+.bh-cluster-fill{height:100%;border-radius:1px;transition:width .3s}
 
 /* ── RESPONSIVE ── */
 @media(max-width:860px){
@@ -309,6 +342,17 @@ body.surveillance .surv-status{display:block}
       <span class="seed-copy" onclick="copySeed()" title="Copy seed URL">COPY LINK</span>
     </div>
     <div class="surv-status" id="surv-status">▣ SURVEILLANCE ACTIVE — SCANNING</div>
+    <div class="surv-controls" id="surv-controls">
+      <div class="surv-row"><label>Auto-Cycle</label><div class="surv-toggle-sm on" id="surv-autocycle" onclick="toggleSurvOpt('autocycle')"></div></div>
+      <div class="surv-row"><label>Anomaly Detect</label><div class="surv-toggle-sm on" id="surv-anomaly" onclick="toggleSurvOpt('anomaly')"></div></div>
+      <div class="surv-row"><label>Network Graph</label><div class="surv-toggle-sm on" id="surv-network" onclick="toggleSurvOpt('network')"></div></div>
+      <div class="surv-row"><label>Dim Inactive</label><div class="surv-toggle-sm on" id="surv-dim" onclick="toggleSurvOpt('dim')"></div></div>
+      <div class="surv-row"><label>Threat Level</label><div class="threat-bar" id="threat-bar"><div class="threat-seg"></div><div class="threat-seg"></div><div class="threat-seg"></div><div class="threat-seg"></div><div class="threat-seg"></div></div></div>
+    </div>
+    <div class="behavior-panel" id="behavior-panel">
+      <div style="font-family:var(--mono);font-size:.5rem;letter-spacing:.15em;color:var(--accent);margin-bottom:.3rem">BEHAVIORAL CLUSTERS</div>
+      <div id="cluster-list"></div>
+    </div>
     <div id="tracked-panel">
       <h4>TRACKED NODES</h4>
       <div id="tracked-list"></div>
@@ -1133,44 +1177,51 @@ function clearConnHighlight(){
 }
 
 // ════════════════════════════════════════════════════════
-//  8. SURVEILLANCE MODE
+//  8. SURVEILLANCE MODE — Deep behavioral analysis
 // ════════════════════════════════════════════════════════
 
 let survMode=false, survInterval=null, survCycleIdx=0;
+const survOpts={autocycle:true,anomaly:true,network:true,dim:true};
 
 function setMode(mode){
   survMode=mode==='surveillance';
   document.body.classList.toggle('surveillance',survMode);
   document.getElementById('mode-explore').classList.toggle('active',!survMode);
   document.getElementById('mode-surv').classList.toggle('active',survMode);
-
-  // Update sidebar header
   document.querySelector('#sidebar-head .mode').textContent=survMode?'SURVEILLANCE':'LIVE';
 
   if(survMode){
     startSurveillance();
   }else{
     stopSurveillance();
-    // Restore all POI opacity
-    document.querySelectorAll('.poi').forEach(el=>el.classList.remove('inactive'));
+    document.querySelectorAll('.poi').forEach(el=>{el.classList.remove('inactive','anomaly');});
+    document.querySelectorAll('.borough').forEach(el=>el.classList.remove('hot-zone'));
+    clearConnectionGraph();
   }
+}
+
+function toggleSurvOpt(key){
+  survOpts[key]=!survOpts[key];
+  document.getElementById('surv-'+key)?.classList.toggle('on',survOpts[key]);
+  if(survMode)updateSurvState();
 }
 
 function startSurveillance(){
   updateSurvState();
+  renderBehaviorClusters();
   survInterval=setInterval(()=>{
-    survCycleIdx=(survCycleIdx+1)%POIS.length;
+    survCycleIdx++;
     updateSurvState();
-    // Auto-advance to next active node every 3s
-    const activePois=POIS.filter(p=>getActivityForHour(p,simHour)>.5);
-    if(activePois.length>0){
-      const target=activePois[survCycleIdx%activePois.length];
-      selectPoi(target.id);
-      // Pan to node
-      const c=document.getElementById('map-area');
-      tx=c.clientWidth/2-target.x*scale;
-      ty=c.clientHeight/2-target.y*scale;
-      applyTransform();
+    if(survOpts.autocycle){
+      const activePois=POIS.filter(p=>getActivityForHour(p,simHour)>.5);
+      if(activePois.length>0){
+        const target=activePois[survCycleIdx%activePois.length];
+        selectPoi(target.id);
+        const c=document.getElementById('map-area');
+        tx=c.clientWidth/2-target.x*scale;
+        ty=c.clientHeight/2-target.y*scale;
+        applyTransform();
+      }
     }
   },3000);
 }
@@ -1180,20 +1231,94 @@ function stopSurveillance(){
 }
 
 function updateSurvState(){
-  // Dim inactive POIs based on current hour activity
+  const events=getEvents(simHour);
+  let activeCount=0,anomalyCount=0;
+
+  // Score each POI
   document.querySelectorAll('.poi').forEach(el=>{
     const p=POIS[+el.dataset.id];
     if(!p)return;
     const act=getActivityForHour(p,simHour);
-    el.classList.toggle('inactive',act<.3);
+    const isActive=act>.3;
+    if(isActive)activeCount++;
+
+    // Anomaly detection: activity spike vs baseline
+    const isAnomaly=survOpts.anomaly&&act>.85&&p.activity<.5;
+    if(isAnomaly)anomalyCount++;
+
+    if(survOpts.dim)el.classList.toggle('inactive',!isActive);
+    el.classList.toggle('anomaly',isAnomaly);
   });
-  // Update status
+
+  // Borough hot zones — mark boroughs with high event density
+  const eventsByBorough={};
+  events.forEach(ev=>{
+    const b=BOROUGHS.find(b=>b.name===ev.borough);
+    if(b){eventsByBorough[b.id]=(eventsByBorough[b.id]||0)+1;}
+  });
+  document.querySelectorAll('.borough').forEach(el=>{
+    el.classList.toggle('hot-zone',(eventsByBorough[el.dataset.id]||0)>=2);
+  });
+
+  // Network graph: show all tracked connections in surv mode
+  if(survOpts.network&&activePoi!==null){
+    showConnectionGraph(activePoi);
+  }
+
+  // Threat level bar
+  const threatLevel=Math.min(5,Math.floor((anomalyCount/10+events.length/8)*2.5));
+  const segs=document.querySelectorAll('#threat-bar .threat-seg');
+  segs.forEach((seg,i)=>{
+    seg.className='threat-seg';
+    if(i<threatLevel){
+      seg.classList.add(i<2?'low':i<3?'med':i<4?'high':'crit');
+    }
+  });
+
+  // Status bar
   const status=document.getElementById('surv-status');
   if(status){
-    const events=getEvents(simHour);
-    const activeCount=POIS.filter(p=>getActivityForHour(p,simHour)>.5).length;
-    status.textContent=`▣ SCANNING — ${activeCount} ACTIVE NODES — ${events.length} EVENTS — ${String(simHour).padStart(2,'0')}:00`;
+    const threatLabels=['CLEAR','LOW','ELEVATED','HIGH','SEVERE','CRITICAL'];
+    status.textContent=`▣ ${threatLabels[threatLevel]} — ${activeCount} ACTIVE — ${anomalyCount} ANOMALIES — ${events.length} EVENTS — ${String(simHour).padStart(2,'0')}:00`;
   }
+
+  // Update behavior clusters
+  renderBehaviorClusters();
+}
+
+// ── Behavioral Clusters: group POIs by activity pattern ──
+function renderBehaviorClusters(){
+  const clusters={
+    'NIGHTLIFE':{filter:p=>p.cat==='eat'||p.cat==='hidden',peak:[20,23],color:'var(--accent)'},
+    'COMMERCE':{filter:p=>p.cat==='shop'||p.cat==='services',peak:[10,17],color:'var(--amber)'},
+    'CULTURE':{filter:p=>p.cat==='culture',peak:[12,20],color:'var(--purple)'},
+    'TRANSIT':{filter:p=>p.cat==='transit',peak:[7,9],color:'var(--cyan)'},
+    'UNDERGROUND':{filter:p=>p.cat==='hidden',peak:[22,4],color:'var(--muted-light)'},
+  };
+  const list=document.getElementById('cluster-list');
+  if(!list)return;
+  let html='';
+  for(const[name,cfg]of Object.entries(clusters)){
+    const members=POIS.filter(cfg.filter);
+    const activeNow=members.filter(p=>getActivityForHour(p,simHour)>.4).length;
+    const pct=members.length?Math.round(activeNow/members.length*100):0;
+    html+=`<div class="bh-cluster" onclick="focusCluster('${name}')">
+      <div class="bh-cluster-head"><span class="bh-cluster-name">${name}</span><span class="bh-cluster-count">${activeNow}/${members.length}</span></div>
+      <div class="bh-cluster-bar"><div class="bh-cluster-fill" style="width:${pct}%;background:${cfg.color}"></div></div>
+    </div>`;
+  }
+  list.innerHTML=html;
+}
+
+function focusCluster(name){
+  const catMap={
+    'NIGHTLIFE':['eat','hidden'],'COMMERCE':['shop','services'],
+    'CULTURE':['culture'],'TRANSIT':['transit'],'UNDERGROUND':['hidden']
+  };
+  const cats=catMap[name]||[];
+  // Filter to just these categories
+  activeFilters=new Set(cats);
+  applyFilters();renderFilterBar();
 }
 
 // ════════════════════════════════════════════════════════
