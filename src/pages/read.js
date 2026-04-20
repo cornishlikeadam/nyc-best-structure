@@ -11,7 +11,13 @@ export default function Reader() {
       <div style={styles.reader}>
         {/* HEADER */}
         <header style={styles.header}>
-          <a href="/" style={styles.backLink}>Back to Home</a>
+          <div style={styles.siteNav}>
+            <a href="/" style={styles.siteNavLink}>LANDING</a>
+            <a href="/read" style={{...styles.siteNavLink, ...styles.siteNavActive}}>READ</a>
+            <a href="/npc-city.html" style={styles.siteNavLink}>SYSTEM MAP</a>
+            <a href="/npc-map.html" style={styles.siteNavLink}>NPC MAP</a>
+            <a href="/map.html" style={styles.siteNavLink}>STATIC MAP</a>
+          </div>
           <div style={styles.dateline}>VOL. 1 — NEW YORK CITY — LIMITED TO 100 EDITIONS</div>
           <div style={styles.ruleThick} />
           <h1 style={styles.masthead}>NYC BEST STRUCTURE</h1>
@@ -68,19 +74,19 @@ export default function Reader() {
           <h3 style={styles.subhead}>The Non-Negotiables</h3>
 
           {[
-            { name: "Joe's Pizza, Carmine St.", desc: "No explanation needed. If you ask for a fork they will remember your face." },
-            { name: "Russ & Daughters, Houston St.", desc: "Lox, cream cheese, everything bagel. Operating since 1914. Your favorite brunch spot could never." },
-            { name: "Los Tacos No. 1, Chelsea Market", desc: "The adobada taco is a spiritual experience. Cash speeds things up." },
-            { name: "Lucali, Carroll Gardens", desc: "BYOB pizza in Brooklyn. The wait is long. The pizza is why you waited." },
-            { name: "Halal Guys, 53rd & 6th", desc: "The white sauce is the real currency of Midtown." },
-            { name: "Xi'an Famous Foods", desc: "Hand-pulled noodles. The spicy cumin lamb. Multiple locations, all correct." },
-            { name: "Peter Luger, Williamsburg", desc: "Cash only. Porterhouse for two. Been here since 1887. Don't order the menu — order the steak." },
-            { name: "Dimes, Chinatown/LES", desc: "Healthy-adjacent. The crowd is beautiful. The grain bowl is too." },
+            { name: "Joe's Pizza, Carmine St.", desc: "No explanation needed. If you ask for a fork they will remember your face.", focus: "joes-pizza" },
+            { name: "Russ & Daughters, Houston St.", desc: "Lox, cream cheese, everything bagel. Operating since 1914. Your favorite brunch spot could never.", focus: "russ-daughters" },
+            { name: "Los Tacos No. 1, Chelsea Market", desc: "The adobada taco is a spiritual experience. Cash speeds things up.", focus: "los-tacos-no-1" },
+            { name: "Lucali, Carroll Gardens", desc: "BYOB pizza in Brooklyn. The wait is long. The pizza is why you waited.", focus: "lucali" },
+            { name: "Halal Guys, 53rd & 6th", desc: "The white sauce is the real currency of Midtown.", focus: "halal-guys" },
+            { name: "Xi'an Famous Foods", desc: "Hand-pulled noodles. The spicy cumin lamb. Multiple locations, all correct.", focus: "xi-an-famous-foods" },
+            { name: "Peter Luger, Williamsburg", desc: "Cash only. Porterhouse for two. Been here since 1887. Don't order the menu — order the steak.", focus: "peter-luger" },
+            { name: "Dimes, Chinatown/LES", desc: "Healthy-adjacent. The crowd is beautiful. The grain bowl is too.", focus: "dimes" },
           ].map((item, i) => (
             <div key={i} style={styles.listEntry}>
               <span style={styles.listNum}>{i + 1}</span>
               <div>
-                <strong style={styles.listName}>{item.name}</strong>
+                <a href={`/npc-city.html?focus=${item.focus}`} style={styles.poiLink}><strong style={styles.listName}>{item.name}</strong></a>
                 <span style={styles.listDesc}> — {item.desc}</span>
               </div>
             </div>
@@ -128,15 +134,15 @@ export default function Reader() {
           <h3 style={styles.subhead}>Architecture & Vantage Points</h3>
 
           {[
-            { place: 'The Woolworth Building', desc: "Neo-Gothic. 1913. They called it the Cathedral of Commerce and they were right." },
-            { place: 'Vessel, Hudson Yards', desc: "Love it or hate it, walk the stairs. 154 flights. The structure is the point." },
-            { place: 'Brooklyn Bridge at dawn', desc: "Tourist trap by noon. Sacred ground at 6 AM. Walk from Brooklyn to Manhattan, not the other way." },
-            { place: 'The High Line', desc: "An elevated rail turned park. Walk it from Gansevoort to 34th St. The Whitney Museum is at the south entrance." },
-            { place: 'Top of the Rock vs. Empire State', desc: "Top of the Rock: you see the Empire State in your photo. Empire State: you're inside it and can't see it. Choose accordingly." },
-            { place: 'Green-Wood Cemetery, Brooklyn', desc: "478 acres. Basquiat is buried here. So is Boss Tweed. The views of the harbor rival any observation deck." },
+            { place: 'The Woolworth Building', desc: "Neo-Gothic. 1913. They called it the Cathedral of Commerce and they were right.", focus: "woolworth-building" },
+            { place: 'Vessel, Hudson Yards', desc: "Love it or hate it, walk the stairs. 154 flights. The structure is the point.", focus: "vessel" },
+            { place: 'Brooklyn Bridge at dawn', desc: "Tourist trap by noon. Sacred ground at 6 AM. Walk from Brooklyn to Manhattan, not the other way.", focus: "brooklyn-bridge" },
+            { place: 'The High Line', desc: "An elevated rail turned park. Walk it from Gansevoort to 34th St. The Whitney Museum is at the south entrance.", focus: "the-high-line" },
+            { place: 'Top of the Rock vs. Empire State', desc: "Top of the Rock: you see the Empire State in your photo. Empire State: you're inside it and can't see it. Choose accordingly.", focus: "top-of-the-rock" },
+            { place: 'Green-Wood Cemetery, Brooklyn', desc: "478 acres. Basquiat is buried here. So is Boss Tweed. The views of the harbor rival any observation deck.", focus: "green-wood-cemetery" },
           ].map((item, i) => (
             <div key={i} style={styles.entry}>
-              <strong>{item.place}</strong> — {item.desc}
+              <a href={`/npc-city.html?focus=${item.focus}`} style={styles.poiLink}><strong>{item.place}</strong></a> — {item.desc}
             </div>
           ))}
         </section>
@@ -151,15 +157,15 @@ export default function Reader() {
           <h3 style={styles.subhead}>Where to Spend (and Where Not To)</h3>
 
           {[
-            { place: 'Strand Bookstore, Broadway & 12th', desc: "18 miles of books. The rare book room upstairs is where the real ones shop." },
-            { place: 'Canal Street Market', desc: "Curated vendors. Good for gifts that don't look like gifts from New York." },
-            { place: 'Brooklyn Flea, Dumbo/Williamsburg', desc: "Vintage, design objects, random excellence. Weekends only." },
-            { place: 'Kith, SoHo', desc: "Streetwear temple. The cereal bar inside is not ironic — it's good." },
-            { place: 'McNally Jackson Books', desc: "Independent. The risograph printing station in the back is usable by anyone." },
+            { place: 'Strand Bookstore, Broadway & 12th', desc: "18 miles of books. The rare book room upstairs is where the real ones shop.", focus: "strand-bookstore" },
+            { place: 'Canal Street Market', desc: "Curated vendors. Good for gifts that don't look like gifts from New York.", focus: "canal-street-market" },
+            { place: 'Brooklyn Flea, Dumbo/Williamsburg', desc: "Vintage, design objects, random excellence. Weekends only.", focus: "brooklyn-flea" },
+            { place: 'Kith, SoHo', desc: "Streetwear temple. The cereal bar inside is not ironic — it's good.", focus: "kith" },
+            { place: 'McNally Jackson Books', desc: "Independent. The risograph printing station in the back is usable by anyone.", focus: "mcnally-jackson" },
             { place: 'Artists & Fleas', desc: "Chelsea Market/Williamsburg — Local makers. Jewelry, prints, leather goods. Rotating vendors keep it fresh." },
           ].map((item, i) => (
             <div key={i} style={styles.entry}>
-              <strong>{item.place}</strong> — {item.desc}
+              {item.focus ? <a href={`/npc-city.html?focus=${item.focus}`} style={styles.poiLink}><strong>{item.place}</strong></a> : <strong>{item.place}</strong>} — {item.desc}
             </div>
           ))}
 
@@ -182,17 +188,17 @@ export default function Reader() {
 
           <div style={styles.neighborhoodGrid}>
             {[
-              { hood: 'Lower East Side', vibe: 'Gritty-chic, late nights', best: 'Bars, live music, vintage' },
-              { hood: 'West Village', vibe: 'Brownstone beautiful', best: 'Walking, eating, people-watching' },
-              { hood: 'Williamsburg', vibe: "Brooklyn's main character", best: 'Coffee, records, rooftops' },
+              { hood: 'Lower East Side', vibe: 'Gritty-chic, late nights', best: 'Bars, live music, vintage', focus: 'lower-east-side' },
+              { hood: 'West Village', vibe: 'Brownstone beautiful', best: 'Walking, eating, people-watching', focus: 'west-village' },
+              { hood: 'Williamsburg', vibe: "Brooklyn's main character", best: 'Coffee, records, rooftops', focus: 'williamsburg' },
               { hood: 'Bushwick', vibe: 'The art is on the buildings', best: 'DIY culture, studios, warehouse parties' },
-              { hood: 'Harlem', vibe: 'Soul and history', best: 'Gospel brunch, jazz, real food' },
+              { hood: 'Harlem', vibe: 'Soul and history', best: 'Gospel brunch, jazz, real food', focus: 'harlem' },
               { hood: 'Chinatown', vibe: 'Sensory overload (good)', best: 'Dumplings at 2 AM, tea shops' },
-              { hood: 'Astoria', vibe: "Queens' quiet flex", best: 'Greek food, beer gardens, diversity' },
-              { hood: 'Red Hook', vibe: 'Industrial waterfront', best: "Key Lime Pie at Steve's, IKEA ferry" },
+              { hood: 'Astoria', vibe: "Queens' quiet flex", best: 'Greek food, beer gardens, diversity', focus: 'astoria' },
+              { hood: 'Red Hook', vibe: 'Industrial waterfront', best: "Key Lime Pie at Steve's, IKEA ferry", focus: 'red-hook' },
             ].map((n, i) => (
               <div key={i} style={styles.neighborhoodCard}>
-                <h4 style={styles.neighborhoodName}>{n.hood}</h4>
+                <h4 style={styles.neighborhoodName}>{n.focus ? <a href={`/npc-city.html?focus=${n.focus}`} style={styles.poiLink}>{n.hood}</a> : n.hood}</h4>
                 <p style={styles.neighborhoodVibe}>{n.vibe}</p>
                 <p style={styles.neighborhoodBest}><strong>Best for:</strong> {n.best}</p>
               </div>
@@ -253,6 +259,12 @@ export default function Reader() {
             <p style={styles.colophonText}>
               <strong>Next in the series:</strong> Tokyo Best Structure — Edition 002
             </p>
+            <div style={{display:'flex',justifyContent:'center',gap:'0.5rem',marginTop:'2rem',flexWrap:'wrap'}}>
+              <a href="/" style={styles.siteNavLink}>LANDING</a>
+              <a href="/npc-city.html" style={styles.siteNavLink}>SYSTEM MAP</a>
+              <a href="/npc-map.html" style={styles.siteNavLink}>NPC MAP</a>
+              <a href="/map.html" style={styles.siteNavLink}>STATIC MAP</a>
+            </div>
           </div>
         </footer>
       </div>
@@ -270,14 +282,26 @@ const styles = {
     textAlign: 'center',
     marginBottom: '3rem',
   },
-  backLink: {
-    display: 'inline-block',
+  siteNav: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '0.4rem',
+    marginBottom: '1.5rem',
+    flexWrap: 'wrap',
+  },
+  siteNavLink: {
     fontFamily: 'var(--mono)',
-    fontSize: '0.75rem',
+    fontSize: '0.6rem',
+    padding: '0.3rem 0.55rem',
     color: 'var(--muted)',
     textDecoration: 'none',
-    marginBottom: '1.5rem',
+    border: '1px solid rgba(0,0,0,0.1)',
     letterSpacing: '0.05em',
+  },
+  siteNavActive: {
+    background: 'var(--ink)',
+    color: 'var(--paper)',
+    borderColor: 'var(--ink)',
   },
   dateline: {
     fontFamily: 'var(--mono)',
@@ -404,6 +428,12 @@ const styles = {
   },
   listName: {
     fontWeight: 700,
+  },
+  poiLink: {
+    color: 'inherit',
+    textDecoration: 'none',
+    borderBottom: '1px solid rgba(0,0,0,0.15)',
+    transition: 'border-color 0.15s',
   },
   listDesc: {
     color: 'var(--muted)',

@@ -153,8 +153,9 @@ export default function Landing() {
           </div>
           <div style={{ textAlign: 'center', marginTop: '2rem' }}>
             <a href={READER_URL} style={styles.btnOutline}>Read a Preview</a>
-            <a href={MAP_URL} style={{ ...styles.btnOutline, marginLeft: '1rem' }}>Explore the Map</a>
+            <a href="/npc-city.html" style={{ ...styles.btnOutline, marginLeft: '1rem' }}>System Map</a>
             <a href={NPC_MAP_URL} style={{ ...styles.btnOutline, marginLeft: '1rem' }}>NPC City Reader</a>
+            <a href={MAP_URL} style={{ ...styles.btnOutline, marginLeft: '1rem' }}>Static Map</a>
           </div>
         </section>
 
