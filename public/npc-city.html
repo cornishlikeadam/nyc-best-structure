@@ -198,6 +198,15 @@ body{background:var(--paper);color:#dde;font-family:var(--sans);overflow:hidden;
 .spark-bar{width:5px;background:var(--cyan);opacity:.4;border-radius:1px 1px 0 0;transition:opacity .15s}
 .spark-bar.current{opacity:1;background:var(--accent)}
 
+/* ── DAILY POI ── */
+#daily-poi{padding:.6rem .75rem;border-bottom:1px solid var(--border);background:rgba(0,212,255,.03);cursor:pointer;transition:background .15s}
+#daily-poi:hover{background:rgba(0,212,255,.06)}
+#daily-poi .dp-label{font-family:var(--mono);font-size:.5rem;letter-spacing:.15em;color:var(--cyan);margin-bottom:.25rem;display:flex;align-items:center;gap:.4rem}
+#daily-poi .dp-label::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:blink 2s ease-in-out infinite}
+#daily-poi .dp-name{font-family:var(--serif);font-size:.88rem;font-weight:700;color:#dde;margin-bottom:.15rem}
+#daily-poi .dp-desc{font-family:var(--serif);font-size:.72rem;color:var(--muted-light);line-height:1.5}
+#daily-poi .dp-meta{font-family:var(--mono);font-size:.5rem;color:var(--muted);margin-top:.2rem}
+
 /* ── TOOLTIP ── */
 #tooltip{position:fixed;z-index:200;pointer-events:none;display:none;background:rgba(10,12,18,.92);border:1px solid var(--border);padding:.35rem .55rem;font-family:var(--mono);font-size:.6rem;color:#bbc;max-width:220px;white-space:nowrap;backdrop-filter:blur(6px)}
 
@@ -358,6 +367,7 @@ body.surveillance .behavior-panel{display:block}
       <h4>TRACKED NODES</h4>
       <div id="tracked-list"></div>
     </div>
+    <div id="daily-poi"></div>
     <div id="filter-bar"></div>
     <div id="search-bar">
       <input id="search-input" type="text" placeholder="Search POIs, boroughs, lines..." autocomplete="off">
@@ -1359,6 +1369,42 @@ function handleDeepLink(){
 }
 
 // ════════════════════════════════════════════════════════
+//  10. DAILY POI — Different highlight every 24h
+//      Deterministic: same day = same POI for all viewers
+// ════════════════════════════════════════════════════════
+
+function getDailyPoi(){
+  const today=new Date();
+  const dayHash=today.getFullYear()*10000+(today.getMonth()+1)*100+today.getDate();
+  const idx=dayHash%POIS.length;
+  return POIS[idx];
+}
+
+function renderDailyPoi(){
+  const el=document.getElementById('daily-poi');
+  if(!el)return;
+  const p=getDailyPoi();
+  const cat=CATS[p.cat];
+  const today=new Date();
+  const dateStr=today.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  el.innerHTML=`
+    <div class="dp-label">NODE OF THE DAY — ${dateStr}</div>
+    <div class="dp-name">${p.name}</div>
+    <div class="dp-desc">${p.desc}</div>
+    <div class="dp-meta">${cat.label} · ${p.hoodName} · POI #${p.numericId+1}</div>
+  `;
+  el.onclick=()=>{
+    selectPoi(p.numericId||p.id);
+    // Zoom to it
+    const c=document.getElementById('map-area');
+    scale=3;
+    tx=c.clientWidth/2-p.x*scale;
+    ty=c.clientHeight/2-p.y*scale;
+    applyTransform();
+  };
+}
+
+// ════════════════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════════════════
 
@@ -1366,6 +1412,7 @@ function init(){
   renderMap();
   renderLayerPanel();
   renderFilterBar();
+  renderDailyPoi();
   resetView();
   handleDeepLink();
   window.addEventListener('resize',resetView);
