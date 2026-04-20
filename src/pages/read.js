@@ -14,9 +14,9 @@ export default function Reader() {
           <div style={styles.siteNav}>
             <a href="/" style={styles.siteNavLink}>LANDING</a>
             <a href="/read" style={{...styles.siteNavLink, ...styles.siteNavActive}}>READ</a>
-            <a href="/npc-city.html" style={styles.siteNavLink}>SYSTEM MAP</a>
-            <a href="/npc-map.html" style={styles.siteNavLink}>NPC MAP</a>
-            <a href="/map.html" style={styles.siteNavLink}>STATIC MAP</a>
+            <a href="/npc-city" style={styles.siteNavLink}>SYSTEM MAP</a>
+            <a href="/npc-map" style={styles.siteNavLink}>NPC MAP</a>
+            <a href="/map" style={styles.siteNavLink}>STATIC MAP</a>
           </div>
           <div style={styles.dateline}>VOL. 1 — NEW YORK CITY — LIMITED TO 100 EDITIONS</div>
           <div style={styles.ruleThick} />
@@ -86,7 +86,7 @@ export default function Reader() {
             <div key={i} style={styles.listEntry}>
               <span style={styles.listNum}>{i + 1}</span>
               <div>
-                <a href={`/npc-city.html?focus=${item.focus}`} style={styles.poiLink}><strong style={styles.listName}>{item.name}</strong></a>
+                <a href={`/npc-city?focus=${item.focus}`} style={styles.poiLink}><strong style={styles.listName}>{item.name}</strong></a>
                 <span style={styles.listDesc}> — {item.desc}</span>
               </div>
             </div>
@@ -142,7 +142,7 @@ export default function Reader() {
             { place: 'Green-Wood Cemetery, Brooklyn', desc: "478 acres. Basquiat is buried here. So is Boss Tweed. The views of the harbor rival any observation deck.", focus: "green-wood-cemetery" },
           ].map((item, i) => (
             <div key={i} style={styles.entry}>
-              <a href={`/npc-city.html?focus=${item.focus}`} style={styles.poiLink}><strong>{item.place}</strong></a> — {item.desc}
+              <a href={`/npc-city?focus=${item.focus}`} style={styles.poiLink}><strong>{item.place}</strong></a> — {item.desc}
             </div>
           ))}
         </section>
@@ -165,7 +165,7 @@ export default function Reader() {
             { place: 'Artists & Fleas', desc: "Chelsea Market/Williamsburg — Local makers. Jewelry, prints, leather goods. Rotating vendors keep it fresh." },
           ].map((item, i) => (
             <div key={i} style={styles.entry}>
-              {item.focus ? <a href={`/npc-city.html?focus=${item.focus}`} style={styles.poiLink}><strong>{item.place}</strong></a> : <strong>{item.place}</strong>} — {item.desc}
+              {item.focus ? <a href={`/npc-city?focus=${item.focus}`} style={styles.poiLink}><strong>{item.place}</strong></a> : <strong>{item.place}</strong>} — {item.desc}
             </div>
           ))}
 
@@ -198,7 +198,7 @@ export default function Reader() {
               { hood: 'Red Hook', vibe: 'Industrial waterfront', best: "Key Lime Pie at Steve's, IKEA ferry", focus: 'red-hook' },
             ].map((n, i) => (
               <div key={i} style={styles.neighborhoodCard}>
-                <h4 style={styles.neighborhoodName}>{n.focus ? <a href={`/npc-city.html?focus=${n.focus}`} style={styles.poiLink}>{n.hood}</a> : n.hood}</h4>
+                <h4 style={styles.neighborhoodName}>{n.focus ? <a href={`/npc-city?focus=${n.focus}`} style={styles.poiLink}>{n.hood}</a> : n.hood}</h4>
                 <p style={styles.neighborhoodVibe}>{n.vibe}</p>
                 <p style={styles.neighborhoodBest}><strong>Best for:</strong> {n.best}</p>
               </div>
@@ -261,9 +261,9 @@ export default function Reader() {
             </p>
             <div style={{display:'flex',justifyContent:'center',gap:'0.5rem',marginTop:'2rem',flexWrap:'wrap'}}>
               <a href="/" style={styles.siteNavLink}>LANDING</a>
-              <a href="/npc-city.html" style={styles.siteNavLink}>SYSTEM MAP</a>
-              <a href="/npc-map.html" style={styles.siteNavLink}>NPC MAP</a>
-              <a href="/map.html" style={styles.siteNavLink}>STATIC MAP</a>
+              <a href="/npc-city" style={styles.siteNavLink}>SYSTEM MAP</a>
+              <a href="/npc-map" style={styles.siteNavLink}>NPC MAP</a>
+              <a href="/map" style={styles.siteNavLink}>STATIC MAP</a>
             </div>
           </div>
         </footer>
